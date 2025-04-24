@@ -141,13 +141,13 @@ star** find_matches(binary_node<star, 6>* root, star_quad reference, unsigned in
 
 
 	//the star quad corresponding to the host cell is not nessessarily the most similar so nearest neighbor search is used:
-	binary_node<star, 6>** nearby_quad_nodes = find_k_nearest_neighbors<star, 6>(host_cell, int_components, match_count, false);
+	binary_node<star, 6>** nearby_quad_nodes = find_k_nearest_neighbors<star, 6>(host_cell, int_components, match_count - 1, false);
 
-	star** possible_stars = new star*[match_count + 1];
-	for (int i = 0; i < match_count; i++) {
+	star** possible_stars = new star*[match_count];
+	for (int i = 0; i < match_count - 1; i++) {
 		possible_stars[i] = nearby_quad_nodes[i]->key.object;
 	}
-	possible_stars[match_count] = host_cell->key.object;
+	possible_stars[match_count - 1] = host_cell->key.object;
 
 	return possible_stars;
 }
@@ -343,8 +343,8 @@ void synthesize_database(unsigned int star_count, const char* path) {
 	store_database<star>(path, stars, star_count);
 }
 
-void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up) {
-	int variety = 4;
+void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up, star** test_stars) {
+	int variety = 3;
 	float threshold = 0.1;
 	//identify edge stars
 
@@ -358,6 +358,9 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_nod
 	float** scores = new float*[visible_stars];
 	for (int i = 0; i < visible_stars; i++) {
 		scores[i] = new float[variety];
+		for (int j = 0; j < variety; j++) {
+			scores[i][j] = 0.0;
+		}
 	}
 	for (int i = 0; i < visible_stars; i++) {
 		for (int j = 0; j < visible_stars; j++) {
@@ -380,20 +383,53 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_nod
 		}
 	}
 
-	float high_score = 0;
-	float second_high_score = 0;
-	int best_star = 0;
-	int next_best_star;
+	float highest_scores[] = { 0.0, 0.0, 0.0 };
+	int best_stars[3][2] = { {0, 0}, {0, 0}, {0, 0} };
+	int matches = 0;
 	for (int i = 0; i < visible_stars; i++) {
+		//find the variation with the highest score:
+		float high_score = 0.0;
+		int local_best_star = 0;
 		for (int j = 0; j < variety; j++) {
 			if (scores[i][j] > high_score) {
 				high_score = scores[i][j];
-				best_star = i;
+				local_best_star = j;
 			}
-			else if (scores[i][j] > second_high_score) {
-				second_high_score = scores[i][j];
-				next_best_star = i;
+			if (scores[i][j] > highest_scores[2]) {
+				highest_scores[2] = scores[i][j];
+				best_stars[2][0] = i;
+				best_stars[2][1] = j;
+				if (scores[i][j] > highest_scores[1]) {
+					highest_scores[2] = highest_scores[1];
+					highest_scores[1] = scores[i][j];
+					best_stars[2][0] = best_stars[1][0];
+					best_stars[2][1] = best_stars[1][1];
+					best_stars[1][0] = i;
+					best_stars[1][1] = j;
+					if (scores[i][j] > highest_scores[0]) {
+						highest_scores[1] = highest_scores[0];
+						highest_scores[0] = scores[i][j];
+						best_stars[1][0] = best_stars[0][0];
+						best_stars[1][1] = best_stars[0][1];
+						best_stars[0][0] = i;
+						best_stars[0][1] = j;
+					}
+				}
 			}
 		}
+		if (test_stars[i] == star_candidates[i][local_best_star]) {
+			matches++;
+		}
 	}
+
+	//check top 3:
+	for (int i = 0; i < 3; i++) {
+		if (test_stars[best_stars[i][0]] == star_candidates[best_stars[i][0]][best_stars[i][1]]) {
+			std::cout << "star #" << i << " was correct\n";
+		}
+	}
+
+	`
+
+	return;
 }

@@ -23,7 +23,7 @@ void find_star_neighbors(binary_node<star, 3>** stars, unsigned int star_count);
 star** find_matches(binary_node<star, 6>* root, star_quad reference, unsigned int quad_count, int match_count);
 star_quad* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned int star_count);
 vec<2>* generate_synthetic_image_data(float right_ascension, float declineation, float ccw_rotation, float fov, star* stars, unsigned int star_count, unsigned int* visible_star_count, star*** visible_stars_out, float noise);
-void orientation_from_centroids(vec<2>* centroids, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up);
+void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up, star** test_stars);
 float random_float(int seed);
 std::string RA_to_string(float RA);
 std::string DEC_to_string(float DEC);

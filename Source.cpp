@@ -35,8 +35,8 @@ void test_star_quad_identification_succes_rate_vs_noise(database<star> data, uns
 			for (int c = 0; c < 6; c++) {
 				reference.distances.components[c] += noise * random_float(seed++);
 			}
-			star* guess = find_matches(quad_root, reference, star_limit, 1);
-			if (guess == data.objects + star_index) {
+			star** guess = find_matches(quad_root, reference, star_limit, 1);
+			if (*guess == data.objects + star_index) {
 				successes++;
 			}
 		}
@@ -161,6 +161,16 @@ void test_average_distance(database<star> data, unsigned int samples, const char
 	}
 	std::cout << distance_sum[0] / samples << ", " << distance_sum[1] / samples << ", " << distance_sum[2] / samples << "\n";
 	fclose(destination);
+}
+void test_identification(database<star> data) {
+	unsigned int seed = 0;
+	unsigned int visible_star_count = 0;
+	float fov = 0.4;
+	star** visible_stars;
+	vec<2>* centroids = generate_synthetic_image_data(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0), random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0);
+	binary_node<star, 6>* quad_root = generate_binary_tree<star, 6>(data.objects, data.object_count, z_index_from_star_quad);
+
+	orientation_from_centroids(centroids, visible_star_count, quad_root, NULL, NULL, NULL, visible_stars);
 }
 
 int main() {
@@ -288,9 +298,10 @@ int main() {
 	*/
 	const char* test_folder = "C:/Users/logac/Desktop/UVSD Star tracker/tests/";
 	//synthesize_database(150000, "C:/Users/logac/Desktop/UVSD Star tracker/database_150000.star");
-	database<star> data = load_database<star>("C:/Users/logac/Desktop/UVSD Star tracker/database_150000.star");
+	database<star> data = load_database<star>("C:/Users/logac/Desktop/UVSD Star tracker/database_16000.star");
 	
-	test_average_distance(data, 150000, test_folder);
+	test_identification(data);
+	//test_average_distance(data, 150000, test_folder);
 	//test_edge_star_proportion_vs_stars_fov(data, 1000, 0.1, 1.5, 250, "C:/Users/logac/Desktop/UVSD Star tracker/tests/");
 	//export_synthetic_centroids(data, 0.5, 0.3, 0.0, 1.5, test_folder);
 	return 0;
