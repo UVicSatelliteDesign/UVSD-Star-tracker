@@ -85,6 +85,33 @@ float unit_vec_arc_length(vec<D> a, vec<D> b) {
 	return acos(dot<D>(a, b));
 }
 
+template <unsigned int D>
+vec<D> solve_system_of_equations(matrix<D, D> M, vec<D> augment) {
+	vec<D> solution;
+
+	//forward elimination
+	for (int i = 0; i < D; i++) {
+		for (int j = i + 1; j < D; j++) {
+			float scaling_factor = -1.0 * M.components[j][i] / M.components[i][i];
+			for (int k = i + 1; k < D; k++) {
+				M.components[j][k] += scaling_factor * M.components[i][k];
+			}
+			augment.components[j] += scaling_factor * augment.components[i];
+		}
+	}
+
+	//back substitution:
+	solution.components[D-1] = M.components[D-1][D-1] / augment.components[D-1];
+	for (int i = D - 2; i >= 0; i--) {
+		float sum = augment.components[i];
+		for (int j = i + 1; j < D; j++) {
+			sum -= M.components[i][j] * solution.components[j];
+		}
+		solution.components[i] = sum / M.components[i][i];
+	}
+
+	return solution;
+}
 
 template <unsigned int D>
 void print_vector(vec<D> v) {

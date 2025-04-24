@@ -65,7 +65,8 @@ void test_edge_star_proportion_vs_stars_fov(database<star> data, unsigned int sa
 		for (int s = 0; s < samples; s++) {
 			star** visible_stars;
 			unsigned int visible_star_count = 0;
-			vec<2>* centroids = generate_synthetic_image_data(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0), random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0);
+			vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
+			vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0);
 			if (visible_star_count > 3) {
 				star_quad* image_quads = generate_star_quads_from_star_centroids(centroids, visible_star_count);
 				for (int j = 0; j < visible_star_count; j++) {
@@ -167,10 +168,22 @@ void test_identification(database<star> data) {
 	unsigned int visible_star_count = 0;
 	float fov = 0.4;
 	star** visible_stars;
-	vec<2>* centroids = generate_synthetic_image_data(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0), random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0);
+	vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
+
+	vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0);
 	binary_node<star, 6>* quad_root = generate_binary_tree<star, 6>(data.objects, data.object_count, z_index_from_star_quad);
 
-	orientation_from_centroids(centroids, visible_star_count, quad_root, NULL, NULL, NULL, visible_stars);
+	vec<3> right;
+	vec<3> up;
+	vec<3> forward;
+	orientation_from_centroids(centroids, visible_star_count, fov, quad_root, &forward, &right, &up, visible_stars);
+	print_vector(normal);
+	std::cout << "\n";
+	print_vector(forward);
+	std::cout << "\n";
+	std::cout << "Perpandicularity: " << dot(up, right) << "\n";
+
+	print_vector(solve_system_of_equations({ {{1.0, 3.0, 4.0},{-1.0, 0.0, -4.0},{3.0, 3.0, 3.0}} }, { 1.0, 2.0, 3.0 }));
 }
 
 int main() {
@@ -298,7 +311,7 @@ int main() {
 	*/
 	const char* test_folder = "C:/Users/logac/Desktop/UVSD Star tracker/tests/";
 	//synthesize_database(150000, "C:/Users/logac/Desktop/UVSD Star tracker/database_150000.star");
-	database<star> data = load_database<star>("C:/Users/logac/Desktop/UVSD Star tracker/database_16000.star");
+	database<star> data = load_database<star>("./database_16000.star");
 	
 	test_identification(data);
 	//test_average_distance(data, 150000, test_folder);

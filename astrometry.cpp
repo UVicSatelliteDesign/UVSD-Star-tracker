@@ -205,11 +205,7 @@ star_quad* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned i
 	return star_quads;
 }
 
-vec<2>* generate_synthetic_image_data(float right_ascension, float declineation, float ccw_rotation, float fov, star* stars, unsigned int star_count, unsigned int* visible_star_count, star*** visible_stars_out, float noise) {
-	//determine the camera normal, right and up directions:
-	vec<3> normal = point_on_sphere(right_ascension, declineation);
-
-
+vec<2>* generate_synthetic_image_data(vec<3> normal, float ccw_rotation, float fov, star* stars, unsigned int star_count, unsigned int* visible_star_count, star*** visible_stars_out, float noise) {
 	vec<3> reference_up = { 0.0, 1.0, 0.0 };
 
 
@@ -343,7 +339,7 @@ void synthesize_database(unsigned int star_count, const char* path) {
 	store_database<star>(path, stars, star_count);
 }
 
-void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up, star** test_stars) {
+void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up, star** test_stars) {
 	int variety = 3;
 	float threshold = 0.1;
 	//identify edge stars
@@ -384,6 +380,7 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_nod
 	}
 
 	float highest_scores[] = { 0.0, 0.0, 0.0 };
+	//first index is the centroid, the second is variation
 	int best_stars[3][2] = { {0, 0}, {0, 0}, {0, 0} };
 	int matches = 0;
 	for (int i = 0; i < visible_stars; i++) {
@@ -428,8 +425,19 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, binary_nod
 			std::cout << "star #" << i << " was correct\n";
 		}
 	}
-
-	`
-
+	float epsilon = sin(fov / 2);
+	vec<3> alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
+	vec<3> beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;
+	vec<3> gamma = star_candidates[best_stars[2][0]][best_stars[2][1]]->dir;
+	matrix<3, 3> coefficents({{
+		{alpha.components[0], alpha.components[1], alpha.components[2]},
+		{beta.components[0], beta.components[1], beta.components[2]},
+		{gamma.components[0], gamma.components[1], gamma.components[2]}
+	}});
+	vec<3> x = solve_system_of_equations(coefficents, {epsilon * centroids[best_stars[0][0]].components[0], epsilon * centroids[best_stars[1][0]].components[0],epsilon * centroids[best_stars[2][0]].components[0] });
+	vec<3> y = solve_system_of_equations(coefficents, {epsilon * centroids[best_stars[0][0]].components[1], epsilon * centroids[best_stars[1][0]].components[1],epsilon * centroids[best_stars[2][0]].components[1] });
+	*right = x;
+	*up = y;
+	*forward = cross(y, x);
 	return;
 }
