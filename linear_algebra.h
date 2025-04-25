@@ -2,6 +2,11 @@
 #include <math.h>
 #include <iostream>
 
+#include <iomanip>
+#include <string>
+#include <io.h>
+#include <fcntl.h>
+
 template <unsigned int D>
 struct vec {
 	float components[D];
@@ -59,6 +64,10 @@ vec<D> scale_vec(vec<D> v, float s) {
 }
 
 template <unsigned int D>
+float length(vec<D> v) {
+	return sqrt(dot(v, v));
+}
+template <unsigned int D>
 vec<D> normalize(vec<D> v) {
 	float length = sqrt(dot(v, v));
 	return scale_vec(v, 1.0 / length);
@@ -101,7 +110,7 @@ vec<D> solve_system_of_equations(matrix<D, D> M, vec<D> augment) {
 	}
 
 	//back substitution:
-	solution.components[D-1] = M.components[D-1][D-1] / augment.components[D-1];
+	solution.components[D-1] = augment.components[D - 1] / M.components[D-1][D-1];
 	for (int i = D - 2; i >= 0; i--) {
 		float sum = augment.components[i];
 		for (int j = i + 1; j < D; j++) {
@@ -134,4 +143,35 @@ void print_int_vector(int_vec<D> v) {
 		}
 	}
 	std::cout << "]";
+}
+
+template <unsigned int R, unsigned int C>
+void print_matrix(matrix<R, C> M) {
+	std::wstring output = L"";
+	for (int i = 0; i < R; i++) {
+		//determine opening and closing characters:
+		std::wstring open = L"\u2502";
+		std::wstring close = L"\u2502";
+		if (i == 0) {
+			open = L'\u250C';
+			close = L'\u2510';
+		}
+		else if (i == R - 1) {
+			open = L'\u2514';
+			close = L'\u2518';
+		}
+		output += open;
+
+		for (int j = 0; j < C; j++) {
+			output += std::to_wstring(M.components[i][j]);
+			if (j != C - 1) {
+				output += L"\t";
+			}
+		}
+		output += close + L'\n';
+	}
+	_setmode(_fileno(stdout), _O_U16TEXT);
+	std::wcout << output;
+	//set back to normal so that printing works correctly in other function
+	_setmode(_fileno(stdout), _O_TEXT);
 }

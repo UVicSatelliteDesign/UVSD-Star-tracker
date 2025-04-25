@@ -181,9 +181,21 @@ void test_identification(database<star> data) {
 	std::cout << "\n";
 	print_vector(forward);
 	std::cout << "\n";
+	std::cout << "right length:: " << length(right) << "\n";
+	std::cout << "up length:: " << length(up) << "\n";
 	std::cout << "Perpandicularity: " << dot(up, right) << "\n";
+	std::cout << "Renormalized Perpandicularity: " << dot(normalize(up), normalize(right)) << "\n";
 
-	print_vector(solve_system_of_equations({ {{1.0, 3.0, 4.0},{-1.0, 0.0, -4.0},{3.0, 3.0, 3.0}} }, { 1.0, 2.0, 3.0 }));
+	matrix<3, 3> test_matrix = {
+		{
+			{1.1,  0.3, -6.3},
+			{2.4, -1.0, 7.4},
+			{4.9, 5.3, 0.4}
+		}
+	};
+	vec<3> test_augment = {0.2, -0.6, 0.6};
+	print_vector(solve_system_of_equations(test_matrix, test_augment));
+	std::cout << std::endl;
 }
 
 int main() {

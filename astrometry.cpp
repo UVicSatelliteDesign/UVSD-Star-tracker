@@ -434,6 +434,14 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov,
 		{beta.components[0], beta.components[1], beta.components[2]},
 		{gamma.components[0], gamma.components[1], gamma.components[2]}
 	}});
+	std::cout << "coefficent matrix:"  << "\n";
+	print_matrix(coefficents);
+	vec<3> a1 = { epsilon * centroids[best_stars[0][0]].components[0], epsilon * centroids[best_stars[1][0]].components[0],epsilon * centroids[best_stars[2][0]].components[0] };
+	vec<3> a2 = { epsilon * centroids[best_stars[0][0]].components[1], epsilon * centroids[best_stars[1][0]].components[1],epsilon * centroids[best_stars[2][0]].components[1] };
+	print_vector(a1);
+	std::cout << "\n";
+	print_vector(a2);
+	std::cout << "\n\n\n";
 	vec<3> x = solve_system_of_equations(coefficents, {epsilon * centroids[best_stars[0][0]].components[0], epsilon * centroids[best_stars[1][0]].components[0],epsilon * centroids[best_stars[2][0]].components[0] });
 	vec<3> y = solve_system_of_equations(coefficents, {epsilon * centroids[best_stars[0][0]].components[1], epsilon * centroids[best_stars[1][0]].components[1],epsilon * centroids[best_stars[2][0]].components[1] });
 	*right = x;
