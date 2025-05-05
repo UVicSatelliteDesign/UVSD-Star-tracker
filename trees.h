@@ -532,7 +532,15 @@ binary_node<T, D>* generate_binary_tree(T* objects, unsigned int object_count, u
 
 	return root;
 }
-
+template <typename T, unsigned int D>
+void delete_binary_tree(binary_node<T, D> node) {
+	if (!node) {
+		return;
+	}
+	delete_binary_tree(node.left);
+	delete_binary_tree(node.right);
+	delete node;
+}
 
 template <unsigned int D>
 unsigned long long int dist_squared_between_z_indices(unsigned long long int a, unsigned long long int b) {
