@@ -66,7 +66,7 @@ void test_edge_star_proportion_vs_stars_fov(database<star> data, unsigned int sa
 			star** visible_stars;
 			unsigned int visible_star_count = 0;
 			vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
-			vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0);
+			vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0, seed++);
 			if (visible_star_count > 3) {
 				star_quad* image_quads = generate_star_quads_from_star_centroids(centroids, visible_star_count);
 				for (int j = 0; j < visible_star_count; j++) {
@@ -163,169 +163,122 @@ void test_average_distance(database<star> data, unsigned int samples, const char
 	std::cout << distance_sum[0] / samples << ", " << distance_sum[1] / samples << ", " << distance_sum[2] / samples << "\n";
 	fclose(destination);
 }
-void test_identification(database<star> data) {
+void test_identification(database<star> data, int samples) {
 	unsigned int seed = 0;
 	unsigned int visible_star_count = 0;
-	float fov = 0.4;
-	star** visible_stars;
-	vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
+	float fov = 0.12;
 
-	vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0);
+	std::cout << "Orientation determination test. Fov:" << fov << "\tSamples:" << samples << "\n";
+
+	int total_visible_stars = 0;
+	int total_matches = 0;
+	int total_successes = 0;
 	binary_node<star, 6>* quad_root = generate_binary_tree<star, 6>(data.objects, data.object_count, z_index_from_star_quad);
+	for (int s = 0; s < samples; s++) {
+		star** visible_stars;
+		vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
 
-	vec<3> right;
-	vec<3> up;
-	vec<3> forward;
-	orientation_from_centroids(centroids, visible_star_count, fov, quad_root, &forward, &right, &up, visible_stars);
-	print_vector(normal);
-	std::cout << "\n";
-	print_vector(forward);
-	std::cout << "\n";
-	std::cout << "right length:: " << length(right) << "\n";
-	std::cout << "up length:: " << length(up) << "\n";
-	std::cout << "Perpandicularity: " << dot(up, right) << "\n";
-	std::cout << "Renormalized Perpandicularity: " << dot(normalize(up), normalize(right)) << "\n";
+		vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0, seed++);
 
-	matrix<3, 3> test_matrix = {
-		{
-			{1.1,  0.3, -6.3},
-			{2.4, -1.0, 7.4},
-			{4.9, 5.3, 0.4}
+		vec<3> right;
+		vec<3> up;
+		vec<3> forward;
+		int matches = 0;
+		int top_three_matches = 0;
+		if (visible_star_count >= 3) {
+			test_orientation_from_centroids(centroids, visible_star_count, fov, 0.01, quad_root, &forward, &right, &up, visible_stars, &matches, &top_three_matches);
 		}
-	};
-	vec<3> test_augment = {0.2, -0.6, 0.6};
-	print_vector(solve_system_of_equations(test_matrix, test_augment));
-	std::cout << std::endl;
+		if (top_three_matches == 3) {
+			total_successes++;
+		}
+
+		total_matches += matches;
+		total_visible_stars += visible_star_count;
+
+		delete[] centroids;
+		delete[] visible_stars;
+	}
+	std::cout << "Average visible stars: " << float(total_visible_stars) / samples << "\tAverage matches: " << float(total_matches) / samples << "\tSuccess rate: " << 100.0 * float(total_successes) / samples << "%\t";
 }
+
+void test_tiled_identification(database<star> data, unsigned int subdivisions, unsigned int samples, float fov, float proportional_position_noise) {
+	unsigned int seed = 0;
+	sky_atlas test_atlas(data, subdivisions);
+
+	float tile_angle = acos(1.0 / sqrt(1.0 + 2.0 / ((subdivisions + 1) * (subdivisions + 1))));
+
+	int total_visible_stars = 0;
+	int total_matches = 0;
+	int total_successes = 0;
+	int total_stars_searched = 0;
+	for (int s = 0; s < samples; s++) {
+
+		
+
+		star** visible_stars;
+		unsigned int visible_star_count = 0;
+		vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
+		vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, proportional_position_noise, seed++);
+		int matches = 0;
+		vec<3> right;
+		vec<3> up;
+		vec<3> forward;
+		int top_three_matches = 0;
+		int search_size = 0;
+
+		if (visible_star_count > 3) {
+			test_atlas.get_orientation(centroids, visible_star_count, fov, fov + tile_angle, 0.075, normal, &forward, &right, &up, visible_stars, &matches, &top_three_matches, &search_size);
+			vec<3> error = sub_vector(forward, normal);
+			total_stars_searched += search_size;
+
+			//print_vector(forward);
+			//std::cout << s << "\n";
+
+			//std::cout << "error: " << length(error) << "\n";
+		}
+		else {
+			//std::cout << "Insufficient stars \n";
+		}
+		if (top_three_matches == 3) {
+			total_successes++;
+		}
+		else {
+			std::cout <<"Sample " << s << " failed \n";
+		}
+		total_matches += matches;
+		total_visible_stars += visible_star_count;
+
+
+		delete[] centroids;
+		delete[] visible_stars;
+	}
+	std::cout << float(total_visible_stars) / samples << ", " << proportional_position_noise << ", " << 100.0 * float(total_successes) / samples << ",\n";
+
+	//std::cout << "Fov: " << fov << " Average visible stars: " << float(total_visible_stars) / samples << "\tAverage matches: " << float(total_matches) / samples << "\tSuccess rate: " << 100.0 * float(total_successes) / samples << "%\n";
+
+}
+
 
 int main() {
 	srand(34);
 	std::setprecision(4);
 	std::cout << std::fixed;
 
-	/*
-	unsigned int star_count = 2000;
-	star* stars = generate_random_stars(star_count);
-	binary_node<star, 3>* root = generate_binary_tree<star, 3>(stars, star_count, z_index_from_star);//divide_cell<star, 3>(stars, 0, star_count - 1);
-	//std::cout << "\n\nStar tree:\n";
-	//print_tree(root, print_star);
-
-
-	binary_node<star, 3>** leaf_nodes = collect_leaf_nodes<star, 3>(root, star_count);
-	find_star_neighbors(leaf_nodes, star_count);
-	binary_node<star, 6>* quad_root = generate_binary_tree<star, 6>(stars, star_count, z_index_from_star_quad);
-	int* match_count = new int[500];
-	float* successs = new float[500];
-	for (int i = 0; i < 500; i++) {
-		match_count[i] = 0;
-		successs[i] = 0.0;
-	}
-	int seed = 521;
-	for (int k = 50; k < 60; k++) {
-		int total_stars_detected = 0;
-		int total_successful_identifications = 0;
-		int best_star_successes = 0;
-		int samples = 10;
-		int valid_samples = 0;///sample where there are enough visible stars to form a quad
-		for (int s = 0; s < samples; s++) {
-			star** test_stars;
-			unsigned int visible_stars;
-			vec<2>* centroids = generate_synthetic_image_data(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0), random_float(seed++) * 6.28, float(k) * 0.006 + 0.065, stars, star_count, &visible_stars, &test_stars, 0.01);
-			if (visible_stars >= 4) {
-				valid_samples++;
-				star_quad* image_quads = generate_star_quads_from_star_centroids(centroids, visible_stars);
-
-
-				star** extracted_quads = new star*[visible_stars];
-				for (int i = 0; i < visible_stars; i++) {
-					extracted_quads[i] = find_match(quad_root, image_quads[i], star_count, 0.1f);
-				}
-
-
-				int matches = 0;
-				float* scores = new float[visible_stars];
-				float threshold = 0.1;
-				for (int i = 0; i < visible_stars; i++) {
-					scores[i] = 0.0;
-					for (int j = 0; j < visible_stars; j++) {
-						if (i != j) {
-							//find the ratio between the distance between the two stars and the distance between the first star and its nearest neghbor:
-							float r = sqrt(dist_sq(centroids[i], centroids[j])) / image_quads[i].longest_arc;
-
-
-							//check if it matches the values of the real data base
-							float real_r = unit_vec_arc_length(extracted_quads[i]->dir, extracted_quads[j]->dir) / extracted_quads[i]->primary.longest_arc;
-
-
-							if (abs(real_r - r) < threshold) {
-								scores[i] += 1.0;
-							}
-						}
-					}
-					std::cout << "score " << i << ":\t" << scores[i] << ": ";
-					if (test_stars[i] == extracted_quads[i]) {
-						std::cout << " Match";
-						matches++;
-					}
-					std::cout << "\n";
-				}
-
-
-				float high_score = 0;
-				float second_high_score = 0;
-				int best_star = 0;
-				int next_best_star;
-				for (int i = 0; i < visible_stars; i++) {
-					if (scores[i] > high_score) {
-						high_score = scores[i];
-						best_star = i;
-					}
-					else if (scores[i] > second_high_score) {
-						second_high_score = scores[i];
-						next_best_star = i;
-					}
-				}
-
-
-
-
-
-
-				match_count[visible_stars] += 1;
-				successs[visible_stars] += float(matches) / visible_stars;
-
-
-				total_successful_identifications += matches;
-				std::cout << "Run #" << s << "\t Stars in image: " << visible_stars << "\t Matches: " << matches << "\t highest score: " << high_score;
-
-
-				if (test_stars[best_star] == extracted_quads[best_star]) {
-					std::cout << " ***";
-					best_star_successes++;
-				}
-				std::cout << "\n";
-				delete[] image_quads;
-				delete[] extracted_quads;
-			}
-			total_stars_detected += visible_stars;
-			delete[] test_stars;
-
-
-			delete[] centroids;
-		}
-		std::cout << "Valid samples: " << valid_samples << "\tIndividial star identification rate: " << float(total_successful_identifications) / float(total_stars_detected) << "\taverage stars detected: " << float(total_stars_detected) / float(samples) << "\tBest star identified correctly: " << float(best_star_successes) / float(samples) << "\tBest star identification rate: " << float(best_star_successes) / float(valid_samples) << "\t average matches: " << float(total_successful_identifications) / samples << "\n";
-	}
-	*/
-	/*
-	for (int i = 0; i < 200; i++) {
-		std::cout << successs[i] / match_count[i] << "\n";
-	}
-	*/
 	const char* test_folder = "C:/Users/logac/Desktop/UVSD Star tracker/tests/";
 	//synthesize_database(150000, "C:/Users/logac/Desktop/UVSD Star tracker/database_150000.star");
 	database<star> data = load_database<star>("./database_16000.star");
-	
-	test_identification(data);
+
+
+	test_tiled_identification(data, 10, 1000, 0.1, 0.0001);
+	/*
+	//test_identification(data, 6000);
+	int grid_resolution = 40;
+	for (int i = 21; i < grid_resolution; i++) {
+		for (int j = 1; j < grid_resolution + 1; j++) {
+			test_tiled_identification(data, 10, 1000, 0.17 * float(i) / (grid_resolution - 1), 0.02 * float(j) / (grid_resolution));
+		}
+	}
+	*/
 	//test_average_distance(data, 150000, test_folder);
 	//test_edge_star_proportion_vs_stars_fov(data, 1000, 0.1, 1.5, 250, "C:/Users/logac/Desktop/UVSD Star tracker/tests/");
 	//export_synthetic_centroids(data, 0.5, 0.3, 0.0, 1.5, test_folder);

@@ -42,6 +42,14 @@ vec<D> clamp_vector(vec<D> v, vec<D> min, vec<D> max) {
 	return v;
 }
 
+template <unsigned int D>
+vec<D> sub_vector(vec<D> a, vec<D> b) {
+	vec<D> out;
+	for (int i = 0; i < D; i++) {
+		out.components[i] = a.components[i] - b.components[i];
+	}
+	return out;
+}
 
 template <unsigned int D>
 float dot(vec<D> a, vec<D> b) {

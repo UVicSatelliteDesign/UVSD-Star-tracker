@@ -421,6 +421,7 @@ unsigned long long int extract_int_component(unsigned long long int Z, unsigned 
 
 template <typename T, unsigned int D>
 int find_split(key_z_index_pair<T>* sorted_pairs, unsigned int first, unsigned int last, int* split_direction, unsigned long long int* split_pos) {
+
 	//count the number of bits the start and end values have in common:
 	//the first non-zero bit (going from left to right) is the first bit that differs between the two values. The split point will be the index of the last value to have a zero in that spot
 	unsigned long long int commonality = sorted_pairs[first].z_index ^ sorted_pairs[last].z_index;
@@ -436,15 +437,12 @@ int find_split(key_z_index_pair<T>* sorted_pairs, unsigned int first, unsigned i
 	step_size /= 2;
 
 
-
-
 	/*
 	std::cout << "start: " << first << " end: " << last << ".\tMask:" << "\t";
 	print_binary_int64(bitmask);
 	std::cout << "\n";
 	*/
 	while (step_size >= 1) {
-		unsigned long long int filtered = sorted_pairs[index + step_size].z_index & bitmask;
 		/*
 		std::cout << "index: " << index << " step size: " << step_size << "\t\t";
 		print_binary_int64(z_indices[index].z_index);
@@ -454,8 +452,11 @@ int find_split(key_z_index_pair<T>* sorted_pairs, unsigned int first, unsigned i
 		print_binary_int64(filtered);
 		std::cout << "\n";
 		*/
-		if (filtered == 0ull && index + step_size < last) {
-			index += step_size;
+		if (index + step_size < last) {
+			unsigned long long int filtered = sorted_pairs[index + step_size].z_index & bitmask;
+			if (filtered == 0ull) {
+				index += step_size;
+			}
 		}
 		step_size /= 2;
 	}
@@ -511,13 +512,11 @@ binary_node<T, D>* generate_binary_tree(T* objects, unsigned int object_count, u
 	//generate pairs:
 	key_z_index_pair<T>* pairs = new key_z_index_pair<T>[object_count];
 
-
 	//initialize pairs:
 	for (int i = 0; i < object_count; i++) {
 		pairs[i].object = objects + i;
 		pairs[i].z_index = z_index_extractor(objects[i]);
 	}
-
 
 	//sort pairs by z_index;
 	std::sort(pairs, pairs + object_count, key_z_index_pair_compare<T>);
