@@ -363,21 +363,28 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 		}
 	}
 	for (int i = 0; i < visible_stars; i++) {
-		for (int j = 0; j < visible_stars; j++) {
-			if (i != j) {
-				//find the ratio between the distance between the two stars and the distance between the first star and its nearest neghbor:
-				float r = sqrt(dist_sq(centroids[i], centroids[j])) / star_quads[i].longest_arc;
+		for (int j = i + 1; j < visible_stars; j++) {
+			//find the ratio between the distance between the two stars and the distance between the first star and its nearest neghbor:
+			float r = sqrt(dist_sq(centroids[i], centroids[j])) / star_quads[i].longest_arc;
+			float observed_separation = sqrt(dist_sq(centroids[i], centroids[j])) * fov * 0.5;
 
-				for (int a = 0; a < variety; a++) {
-					for (int b = 0; b < variety; b++) {
-						//check if it matches the values of the real data base
-						float real_r = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir) / star_candidates[i][a]->primary.longest_arc;
-
-
-						if (abs(real_r - r) < identification_theshold) {
-							scores[i][a] += 1.0;
-						}
+			for (int a = 0; a < variety; a++) {
+				for (int b = 0; b < variety; b++) {
+					//check if it matches the values of the real data base
+					float real_r = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir) / star_candidates[i][a]->primary.longest_arc;
+					float real_separation = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir);
+					//float diff = real_r - r;
+					float diff = real_separation - observed_separation;
+					float factor = identification_theshold / (identification_theshold + 50.0 * diff * diff);
+					scores[i][a] += factor;
+					scores[j][b] += factor;
+					/*
+					if (abs(diff) < identification_theshold) {
+						scores[i][a] += 1.0;
+						scores[j][b] += 1.0;
 					}
+					*/
+					
 				}
 			}
 		}
@@ -428,7 +435,7 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 			*top_three_matches += 1;
 		}
 	}
-
+	
 	float epsilon = sin(fov / 2);
 	vec<3> alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
 	vec<3> beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;

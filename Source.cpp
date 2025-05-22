@@ -201,7 +201,7 @@ void test_identification(database<star> data, int samples) {
 	std::cout << "Average visible stars: " << float(total_visible_stars) / samples << "\tAverage matches: " << float(total_matches) / samples << "\tSuccess rate: " << 100.0 * float(total_successes) / samples << "%\t";
 }
 
-void test_tiled_identification(database<star> data, unsigned int subdivisions, unsigned int samples, float fov, float proportional_position_noise) {
+void test_tiled_identification(database<star> data, unsigned int subdivisions, unsigned int samples, float fov, float proportional_position_noise, float identification_theshold) {
 	unsigned int seed = 0;
 	sky_atlas test_atlas(data, subdivisions);
 
@@ -227,7 +227,7 @@ void test_tiled_identification(database<star> data, unsigned int subdivisions, u
 		int search_size = 0;
 
 		if (visible_star_count > 3) {
-			test_atlas.get_orientation(centroids, visible_star_count, fov, fov + tile_angle, 0.075, normal, &forward, &right, &up, visible_stars, &matches, &top_three_matches, &search_size);
+			test_atlas.get_orientation(centroids, visible_star_count, fov, fov + tile_angle, identification_theshold, normal, &forward, &right, &up, visible_stars, &matches, &top_three_matches, &search_size);
 			vec<3> error = sub_vector(forward, normal);
 			total_stars_searched += search_size;
 
@@ -243,7 +243,7 @@ void test_tiled_identification(database<star> data, unsigned int subdivisions, u
 			total_successes++;
 		}
 		else {
-			std::cout <<"Sample " << s << " failed \n";
+			//std::cout <<"Sample " << s << " failed \n";
 		}
 		total_matches += matches;
 		total_visible_stars += visible_star_count;
@@ -269,16 +269,16 @@ int main() {
 	database<star> data = load_database<star>("./database_16000.star");
 
 
-	test_tiled_identification(data, 10, 1000, 0.1, 0.0001);
-	/*
+	//test_tiled_identification(data, 10, 1000, 0.13, 0.01, 0.0001);
+	
 	//test_identification(data, 6000);
 	int grid_resolution = 40;
-	for (int i = 21; i < grid_resolution; i++) {
+	for (int i = 0; i < grid_resolution; i++) {
 		for (int j = 1; j < grid_resolution + 1; j++) {
-			test_tiled_identification(data, 10, 1000, 0.17 * float(i) / (grid_resolution - 1), 0.02 * float(j) / (grid_resolution));
+			test_tiled_identification(data, 10, 1000, 0.17 * float(i) / (grid_resolution - 1), 0.02 * float(j) / (grid_resolution - 1), 0.0001);
 		}
 	}
-	*/
+	
 	//test_average_distance(data, 150000, test_folder);
 	//test_edge_star_proportion_vs_stars_fov(data, 1000, 0.1, 1.5, 250, "C:/Users/logac/Desktop/UVSD Star tracker/tests/");
 	//export_synthetic_centroids(data, 0.5, 0.3, 0.0, 1.5, test_folder);
