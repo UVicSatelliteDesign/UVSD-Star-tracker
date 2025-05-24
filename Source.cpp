@@ -33,7 +33,7 @@ void test_star_quad_identification_succes_rate_vs_noise(database<star> data, uns
 			unsigned int star_index = (unsigned int)(random_float(seed++) * (star_limit - 1));
 			star_quad reference = data.objects[star_index].primary;
 			for (int c = 0; c < 6; c++) {
-				reference.distances.components[c] += noise * random_float(seed++);
+				reference.distances[c] += noise * random_float(seed++);
 			}
 			star** guess = find_matches(quad_root, reference, star_limit, 1);
 			if (*guess == data.objects + star_index) {
@@ -71,8 +71,8 @@ void test_edge_star_proportion_vs_stars_fov(database<star> data, unsigned int sa
 				star_quad* image_quads = generate_star_quads_from_star_centroids(centroids, visible_star_count);
 				for (int j = 0; j < visible_star_count; j++) {
 					//check distance to the edge
-					float dist = std::min(std::min(1.0f - centroids[j].components[0], 1.0f + centroids[j].components[0]), std::min(1.0f - centroids[j].components[1], 1.0f + centroids[j].components[1]));
-					float target_star = image_quads[j].distances.components[k] * image_quads[j].longest_arc;
+					float dist = std::min(std::min(1.0f - centroids[j][0], 1.0f + centroids[j][0]), std::min(1.0f - centroids[j][1], 1.0f + centroids[j][1]));
+					float target_star = image_quads[j].distances[k] * image_quads[j].longest_arc;
 					if (dist < target_star) {
 						total_edge_stars++;
 					}
@@ -109,9 +109,9 @@ void test_average_distance(database<star> data, unsigned int samples, const char
 	float* third_distances = new float[samples];
 	float distance_sum[3] = { 0.0, 0.0, 0.0};
 	for (int i = 0; i < samples; i++) {
-		float distance1 = data.objects[i].primary.distances.components[0] * data.objects[i].primary.longest_arc;
-		float distance2 = data.objects[i].primary.distances.components[1] * data.objects[i].primary.longest_arc;
-		float distance3 = data.objects[i].primary.distances.components[2] * data.objects[i].primary.longest_arc;
+		float distance1 = data.objects[i].primary.distances[0] * data.objects[i].primary.longest_arc;
+		float distance2 = data.objects[i].primary.distances[1] * data.objects[i].primary.longest_arc;
+		float distance3 = data.objects[i].primary.distances[2] * data.objects[i].primary.longest_arc;
 		distance_sum[0] += distance1;
 		distance_sum[1] += distance2;
 		distance_sum[2] += distance3;
@@ -269,8 +269,8 @@ int main() {
 	database<star> data = load_database<star>("./database_16000.star");
 
 
-	//test_tiled_identification(data, 10, 1000, 0.13, 0.01, 0.0001);
-	
+	test_tiled_identification(data, 10, 1000, 0.13, 0.01, 0.0001);
+	/*
 	//test_identification(data, 6000);
 	int grid_resolution = 40;
 	for (int i = 0; i < grid_resolution; i++) {
@@ -278,7 +278,7 @@ int main() {
 			test_tiled_identification(data, 10, 1000, 0.17 * float(i) / (grid_resolution - 1), 0.02 * float(j) / (grid_resolution - 1), 0.0001);
 		}
 	}
-	
+	*/
 	//test_average_distance(data, 150000, test_folder);
 	//test_edge_star_proportion_vs_stars_fov(data, 1000, 0.1, 1.5, 250, "C:/Users/logac/Desktop/UVSD Star tracker/tests/");
 	//export_synthetic_centroids(data, 0.5, 0.3, 0.0, 1.5, test_folder);

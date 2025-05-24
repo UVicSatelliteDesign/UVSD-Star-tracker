@@ -384,7 +384,7 @@ unsigned long long int clamped_vec_to_z_index(vec<D> v) {
 	//assumes that all compoents of v are in the range 0.0 to 1.0
 	unsigned long long int Z = 0;
 	for (int i = 0; i < D; i++) {
-		float x = v.components[i] * (1 << ((64 - (64 % D)) / D));
+		float x = v[i] * (1 << ((64 - (64 % D)) / D));
 		Z += spread_bits<D>((unsigned long long int)(x)) << i;
 	}
 	return Z;
@@ -393,7 +393,7 @@ template <unsigned int D>
 unsigned long long int vec_to_z_index(vec<D> v, vec<D> min, vec<D> max) {
 	unsigned long long int Z = 0;
 	for (int i = 0; i < D; i++) {
-		Z += spread_bits<D>((unsigned long long int)(((v.components[i] - min.components[i]) / (max.components[i] - min.components[i])) * ((1 << ((64 - (64 % D)) / D)) - 1))) << i;
+		Z += spread_bits<D>((unsigned long long int)(((v[i] - min[i]) / (max[i] - min[i])) * ((1 << ((64 - (64 % D)) / D)) - 1))) << i;
 	}
 	return Z;
 }
@@ -401,7 +401,7 @@ template <unsigned int D>
 int_vec<D> int_components_from_vec(vec<D> v, vec<D> min, vec<D> max) {
 	int_vec<D> V;
 	for (int i = 0; i < D; i++) {
-		V.components[i] = ((v.components[i] - min.components[i]) / (max.components[i] - min.components[i])) * ((1 << ((64 - (64 % D)) / D)) - 1);
+		V[i] = ((v[i] - min[i]) / (max[i] - min[i])) * ((1 << ((64 - (64 % D)) / D)) - 1);
 	}
 	return V;
 }
@@ -409,7 +409,7 @@ template <unsigned int D>
 vec<D> z_index_to_vec(unsigned long long int Z, vec<D> min, vec<D> max) {
 	vec<D> v;
 	for (int i = 0; i < D; i++) {
-		v.components[i] = cluster_bits<D>(Z) * (max.components[i] - min.components[i]) + min.components[i];
+		v[i] = cluster_bits<D>(Z) * (max[i] - min[i]) + min[i];
 	}
 	return v;
 }
@@ -486,7 +486,7 @@ binary_node<T, D>* divide_cell(key_z_index_pair<T>* pairs, unsigned int first, u
 		-1,
 		NULL, NULL, NULL, NULL });
 	for (int i = 0; i < D; i++) {
-		node->components.components[i] = extract_int_component<D>(z_index, i);
+		node->components[i] = extract_int_component<D>(z_index, i);
 	}
 	if (last - first > 0) {
 		left = divide_cell<T, D>(pairs, first, split_index);
@@ -592,7 +592,7 @@ T** brute_force_neighbors(T* objects, unsigned int object_count, binary_node<T, 
 template <typename T, unsigned int D>
 long long int split_plane_dist(binary_node<T, D>* node, int_vec<D> reference) {
 	long long int split_plane = node->split_position;//*(reinterpret_cast<float*>(node->position) + node->split_direction);
-	long long int point_pos = reference.components[node->split_direction];//*(reinterpret_cast<float*>(&reference->key->dir) + node->split_direction);
+	long long int point_pos = reference[node->split_direction];//*(reinterpret_cast<float*>(&reference->key->dir) + node->split_direction);
 	long long int delta = point_pos - split_plane;
 	return delta;
 }
@@ -600,8 +600,8 @@ template <typename T, unsigned int D>
 unsigned long long int dist_to_node(binary_node<T, D>* a, int_vec<D> v) {
 	unsigned long long int distance_squared = 0;
 	for (int i = 0; i < D; i++) {
-		unsigned long long int c1 = a->components.components[i];
-		unsigned long long int c2 = v.components[i];
+		unsigned long long int c1 = a->components[i];
+		unsigned long long int c2 = v[i];
 		unsigned long long int delta;
 		if (c1 < c2) {
 			delta = c2 - c1;
@@ -729,7 +729,7 @@ binary_node<T, D>* find_cell(binary_node<T, D>* root, vec<D> v, vec<D> min, vec<
 	//compute the integer components of the vector:
 	int_vec<D> int_components;
 	for (int i = 0; i < D; i++) {
-		int_components.components[i] = (unsigned long long int)(((v.components[i] - min.components[i]) / (max.components[i] - min.components[i])) * (1 << ((64 - (64 % D)) / D)));
+		int_components[i] = (unsigned long long int)(((v[i] - min[i]) / (max[i] - min[i])) * (1 << ((64 - (64 % D)) / D)));
 	}
 
 
@@ -738,7 +738,7 @@ binary_node<T, D>* find_cell(binary_node<T, D>* root, vec<D> v, vec<D> min, vec<
 	while (current->split_direction != -1) {
 		//check which side of the split plane this node is one:
 		unsigned long long int split_plane = current->split_position;
-		if (int_components.components[current->split_direction] < split_plane) {
+		if (int_components[current->split_direction] < split_plane) {
 			current = current->left;
 		}
 		else {
