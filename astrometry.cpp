@@ -36,16 +36,7 @@ star* generate_random_stars(unsigned int star_count) {
 	for (int i = 0; i < star_count; i++) {
 		float ra = random_float(seed++) * 2.0 * PI;
 		float dec = asin(random_float(seed++) * 2.0 - 1.0);
-		std::string name = std::string("Star #") + std::to_string(i);
-		int c = 0;
-		while (c < name.length()) {
-			stars[i].name[c] = name.at(c);
-			c++;
-		}
-		stars[i].name[c] = '\0';
-		stars[i].right_ascension = ra;
-		stars[i].magnitude = 0.0;
-		stars[i].declination = dec;
+
 		stars[i].dir = point_on_sphere(ra, dec);
 	}
 	return stars;
@@ -61,7 +52,7 @@ int compare_stars_simple(star a, star b) {
 	return same;
 }
 void find_star_neighbors(binary_node<star, 3>** stars, unsigned int star_count) {
-	star_quad* stellar_web = new star_quad[star_count];
+	feature* stellar_web = new feature[star_count];
 	for (int i = 0; i < star_count; i++) {
 		binary_node<star, 3>** close_stars = find_k_nearest_neighbors<star, 3>(stars[i], stars[i]->components, 3, false);
 		float distances[6];
@@ -80,14 +71,13 @@ void find_star_neighbors(binary_node<star, 3>** stars, unsigned int star_count) 
 
 
 		for (int c = 0; c < 6; c++) {
-			stars[i]->key.object->primary.distances[c] = distances[c] / longest;
+			stars[i]->key.object->primary.distances[c] = distances[c];
 		}
-		stars[i]->key.object->primary.longest_arc = longest;
 		delete[] close_stars;
 	}
 }
-star_quad* find_star_neighbors_redundancy(binary_node<star, 3>** stars, unsigned int star_count) {
-	star_quad* stellar_web = new star_quad[star_count * 4];
+feature* find_star_neighbors_redundancy(binary_node<star, 3>** stars, unsigned int star_count) {
+	feature* stellar_web = new feature[star_count * 4];
 	int s = 0;
 	for (int i = 0; i < star_count; i++) {
 		binary_node<star, 3>** close_stars = find_k_nearest_neighbors<star, 3>(stars[i], stars[i]->components, 6, false);
@@ -122,8 +112,7 @@ star_quad* find_star_neighbors_redundancy(binary_node<star, 3>** stars, unsigned
 
 
 			for (int c = 0; c < 6; c++) {
-				stellar_web[s].distances[c] = distances[c] / longest;
-				stellar_web[s].longest_arc = longest;
+				stellar_web[s].distances[c] = distances[c];
 			}
 			s++;
 		}
@@ -137,7 +126,7 @@ unsigned long long int z_index_from_star(star s) {
 
 
 
-star** find_matches(binary_node<star, 6>* root, star_quad reference, unsigned int quad_count, int match_count) {
+star** find_matches(binary_node<star, 6>* root, feature reference, unsigned int quad_count, int match_count) {
 
 
 	int_vec<6> int_components = int_components_from_vec<6>(reference.distances, vec<6>(0.0), vec<6>(1.0));
@@ -163,8 +152,8 @@ star** find_matches(binary_node<star, 6>* root, star_quad reference, unsigned in
 	return possible_stars;
 }
 
-star_quad* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned int star_count) {
-	star_quad* star_quads = new star_quad[star_count];
+feature* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned int star_count) {
+	feature* star_quads = new feature[star_count];
 	for (int i = 0; i < star_count; i++) {
 		float close_distances[3] = { INFINITY, INFINITY, INFINITY };
 		vec<2>* close_stars[3];
@@ -210,7 +199,6 @@ star_quad* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned i
 		for (int c = 0; c < 6; c++) {
 			star_quads[i].distances[c] = distances[c] / longest;
 		}
-		star_quads[i].longest_arc = longest;
 	}
 	return star_quads;
 }
@@ -326,16 +314,6 @@ std::string DEC_to_string(float DEC) {
 	float second = 60.0 * (minute - floor(minute));
 	return std::to_string(int(deg)) + " " + std::to_string(int(minute)) + "m " + std::to_string(int(second)) + "s";
 }
-void print_star(star s) {
-	std::cout << s.name << ":\tR.A: " << RA_to_string(s.right_ascension) << "\tDEC: " << DEC_to_string(s.declination) << "\t x: " << s.dir[0] << "\ty: " << s.dir[1] << "\tz: " << s.dir[2] << "\tZ index: ";
-}
-void print_stars(star* stars, unsigned int star_count) {
-	for (int i = 0; i < star_count; i++) {
-		print_star(stars[i]);
-		std::cout << "\n";
-	}
-}
-
 
 void synthesize_database(unsigned int star_count, const char* path) {
 	star* stars = generate_random_stars(star_count);
@@ -350,7 +328,7 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 	//identify edge stars
 	
 	//extract possible star quads
-	star_quad* star_quads = generate_star_quads_from_star_centroids(centroids, visible_stars);
+	feature* star_quads = generate_star_quads_from_star_centroids(centroids, visible_stars);
 	star*** star_candidates = new star * *[visible_stars];
 	for (int i = 0; i < visible_stars; i++) {
 		star** matches = find_matches(root, star_quads[i], visible_stars, variety);
@@ -366,13 +344,13 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 	for (int i = 0; i < visible_stars; i++) {
 		for (int j = i + 1; j < visible_stars; j++) {
 			//find the ratio between the distance between the two stars and the distance between the first star and its nearest neghbor:
-			float r = sqrt(dist_sq(centroids[i], centroids[j])) / star_quads[i].longest_arc;
+			float r = sqrt(dist_sq(centroids[i], centroids[j]));
 			float observed_separation = sqrt(dist_sq(centroids[i], centroids[j])) * fov * 0.5;
 
 			for (int a = 0; a < variety; a++) {
 				for (int b = 0; b < variety; b++) {
 					//check if it matches the values of the real data base
-					float real_r = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir) / star_candidates[i][a]->primary.longest_arc;
+					float real_r = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir);
 					float real_separation = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir);
 					//float diff = real_r - r;
 					float diff = real_separation - observed_separation;
@@ -463,7 +441,7 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov,
 	//identify edge stars
 
 	//extract possible star quads
-	star_quad* star_quads = generate_star_quads_from_star_centroids(centroids, visible_stars);
+	feature* star_quads = generate_star_quads_from_star_centroids(centroids, visible_stars);
 	star*** star_candidates = new star * *[visible_stars];
 	for (int i = 0; i < visible_stars; i++) {
 		star** matches = find_matches(root, star_quads[i], visible_stars, variety);
@@ -480,12 +458,12 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov,
 		for (int j = 0; j < visible_stars; j++) {
 			if (i != j) {
 				//find the ratio between the distance between the two stars and the distance between the first star and its nearest neghbor:
-				float r = sqrt(dist_sq(centroids[i], centroids[j])) / star_quads[i].longest_arc;
+				float r = sqrt(dist_sq(centroids[i], centroids[j]));
 
 				for (int a = 0; a < variety; a++) {
 					for (int b = 0; b < variety; b++) {
 						//check if it matches the values of the real data base
-						float real_r = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir) / star_candidates[i][a]->primary.longest_arc;
+						float real_r = unit_vec_arc_length(star_candidates[i][a]->dir, star_candidates[j][b]->dir);
 
 
 						if (abs(real_r - r) < threshold) {

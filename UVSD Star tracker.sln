@@ -5,6 +5,8 @@ VisualStudioVersion = 16.0.34601.136
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UVSD Star tracker", "UVSD Star tracker.vcxproj", "{1E2E5548-BF5C-47DE-B60A-0031AC18461B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UVSD-Star-Tracker-Database-Manager", "..\UVSD-Star-Tracker-Database-Manager\UVSD-Star-Tracker-Database-Manager.vcxproj", "{7418C358-0DA3-413F-AFCC-3BE099AD69B4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{1E2E5548-BF5C-47DE-B60A-0031AC18461B}.Release|x64.Build.0 = Release|x64
 		{1E2E5548-BF5C-47DE-B60A-0031AC18461B}.Release|x86.ActiveCfg = Release|Win32
 		{1E2E5548-BF5C-47DE-B60A-0031AC18461B}.Release|x86.Build.0 = Release|Win32
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Debug|x64.ActiveCfg = Debug|x64
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Debug|x64.Build.0 = Debug|x64
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Debug|x86.ActiveCfg = Debug|Win32
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Debug|x86.Build.0 = Debug|Win32
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Release|x64.ActiveCfg = Release|x64
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Release|x64.Build.0 = Release|x64
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Release|x86.ActiveCfg = Release|Win32
+		{7418C358-0DA3-413F-AFCC-3BE099AD69B4}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
