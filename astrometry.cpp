@@ -209,17 +209,17 @@ vec<2>* generate_synthetic_image_data(vec<3> normal, float ccw_rotation, float f
 
 	vec<3> right = normalize(cross(normal, reference_up));
 	//apply twist:
-	matrix<3, 3> ccw_twist_matrix = rotation_matrix(normal, ccw_rotation);
+	mat<3, 3> ccw_twist_matrix = rotation_mat(normal, ccw_rotation);
 	right = normalize(mat_mult_vec(ccw_twist_matrix, right));
 
 
 	vec<3> up = normalize(cross(right, normal));
 
 
-	matrix<3, 3> pitch_up_matrix = rotation_matrix(right, fov / 2);
-	matrix<3, 3> pitch_down_matrix = rotation_matrix(right, -fov / 2);
-	matrix<3, 3> yaw_left_matrix = rotation_matrix(up, fov / 2);
-	matrix<3, 3> yaw_right_matrix = rotation_matrix(up, -fov / 2);
+	mat<3, 3> pitch_up_matrix = rotation_mat(right, fov / 2);
+	mat<3, 3> pitch_down_matrix = rotation_mat(right, -fov / 2);
+	mat<3, 3> yaw_left_matrix = rotation_mat(up, fov / 2);
+	mat<3, 3> yaw_right_matrix = rotation_mat(up, -fov / 2);
 
 
 	//determine the 4 cutting plane normals:
@@ -420,7 +420,7 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 	vec<3> alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
 	vec<3> beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;
 	vec<3> gamma = star_candidates[best_stars[2][0]][best_stars[2][1]]->dir;
-	matrix<3, 3> coefficents({ {
+	mat<3, 3> coefficents({ {
 		{alpha[0], alpha[1], alpha[2]},
 		{beta[0], beta[1], beta[2]},
 		{gamma[0], gamma[1], gamma[2]}
@@ -515,7 +515,7 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov,
 	vec<3> alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
 	vec<3> beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;
 	vec<3> gamma = star_candidates[best_stars[2][0]][best_stars[2][1]]->dir;
-	matrix<3, 3> coefficents({ {
+	mat<3, 3> coefficents({ {
 		{alpha[0], alpha[1], alpha[2]},
 		{beta[0], beta[1], beta[2]},
 		{gamma[0], gamma[1], gamma[2]}

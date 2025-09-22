@@ -14,21 +14,20 @@ struct fixed_array {
 
 
 template <typename T, unsigned int D>
-class gen_vec {
-private:
-	fixed_array<T, D> components;
-public:
-	gen_vec(){
+struct vec {
+	T components[D];
+
+	vec(){
 		for (int i = 0; i < D; i++) {
 			components.entries[i] = T(0);
 		}
 	}
-	gen_vec(T s) {
+	vec(T s) {
 		for (int i = 0; i < D; i++) {
 			components.entries[i] = s;
 		}
 	}
-	gen_vec(fixed_array<T, D> c) {
+	vec(fixed_array<T, D> c) {
 		components = c;
 	}
 
@@ -36,7 +35,7 @@ public:
 		return components.entries[i];
 	}
 
-	float operator* (gen_vec v) {
+	float operator* (vec v) {
 		float val = 0.0;
 		for (int i = 0; i < D; i++) {
 			val += (*this)[i] * v[i];
@@ -45,55 +44,35 @@ public:
 	}
 };
 
-template <unsigned int D>
-using vec = gen_vec<float, D>;
 
-template <unsigned int D>
-using int_vec = gen_vec<int, D>;
+template <typename T, unsigned int R, unsigned int C>
+struct mat {
+	vec<T, C> components[R];
 
-template <unsigned int R, unsigned int C>
-class matrix {
-private:
-	fixed_array<vec<C>, R> rows;
-public:
-	matrix() {
-
-	}
-	matrix(fixed_array<fixed_array<float, C>, R> c) {
-		for (int i = 0; i < R; i++) {
-			rows.entries[i] = c.entries[i];
-		}
-	}
-	vec<C>& operator [](unsigned int i) {
-		return rows.entries[i];
+	vec<T, C>& operator [](unsigned int i) {
+		return components[i];
 	}
 };
 
 
 
-template <unsigned int D>
-float dist_sq(vec<D> a, vec<D> b) {
+
+template <typename T, unsigned int D>
+float dist_sq(vec<T, D> a, vec<T, D> b) {
 	float dist = 0.0;
 	for (int i = 0; i < D; i++) {
-		float delta = a[i] - b[i];
+		float delta = (float)a[i] - (float)b[i];
 		dist += delta * delta;
 	}
 	return dist;
 }
 
 
-template <unsigned int D>
-vec<D> clamp_vector(vec<D> v, vec<D> min, vec<D> max) {
-	for (int i = 0; i < D; i++) {
-		v[i] -= min[i];
-		v[i] /= max[i] - min[i];
-	}
-	return v;
-}
 
-template <unsigned int D>
-vec<D> sub_vector(vec<D> a, vec<D> b) {
-	vec<D> out;
+template <typename T, unsigned int D>
+vec<T, D> sub_vecs(vec<T, D> a, vec<T, D> b) {
+
+	vec<T, D> out;
 	for (int i = 0; i < D; i++) {
 		out[i] = a[i] - b[i];
 	}
@@ -101,11 +80,11 @@ vec<D> sub_vector(vec<D> a, vec<D> b) {
 }
 
 
+template <typename T>
+vec<T, 3> cross(vec<T, 3> a, vec<T, 3> b);
 
-vec<3> cross(vec<3> a, vec<3> b);
-
-template <unsigned int D>
-vec<D> scale_vec(vec<D> v, float s) {
+template <typename T, unsigned int D>
+vec<T, D> scale_vec(vec<T, D> v, T s) {
 	vec<D> out;
 	for (int i = 0; i < D; i++) {
 		out[i] = v[i] * s;
@@ -113,21 +92,22 @@ vec<D> scale_vec(vec<D> v, float s) {
 	return out;
 }
 
-template <unsigned int D>
-float length(vec<D> v) {
+template <typename T, unsigned int D>
+float length(vec<T, D> v) {
 	return sqrt(dot(v, v));
 }
-template <unsigned int D>
-vec<D> normalize(vec<D> v) {
+template <typename T, unsigned int D>
+vec<T, D> normalize(vec<T, D> v) {
 	float length = sqrt(v * v);
 	return scale_vec(v, 1.0 / length);
 }
 
-matrix<3, 3> rotation_matrix(vec<3> pivot, float angle);
+template <typename T>
+mat<T, 3, 3> rotation_mat(vec<T, 3> pivot, T angle);
 
-template <unsigned int R, unsigned int C>
-vec<R> mat_mult_vec(matrix<R, C> m, vec<C> v) {
-	vec<R> out;
+template <typename T, unsigned int R, unsigned int C>
+vec<T, R> mat_mult_vec(mat<T, R, C> m, vec<T, C> v) {
+	vec<T, R> out;
 	for (int i = 0; i < R; i++) {
 		float sum = 0.0;
 		for (int j = 0; j < C; j++) {
@@ -138,14 +118,14 @@ vec<R> mat_mult_vec(matrix<R, C> m, vec<C> v) {
 	return out;
 }
 
-template <unsigned int D>
-float unit_vec_arc_length(vec<D> a, vec<D> b) {
+template <typename T, unsigned int D>
+float unit_vec_arc_length(vec<T, D> a, vec<T, D> b) {
 	//return the arc length between two unit vectors
 	return acos(a * b);
 }
 
-template <unsigned int D>
-vec<D> solve_system_of_equations(matrix<D, D> M, vec<D> augment) {
+template <typename T, unsigned int D>
+vec<T, D> solve_system_of_equations(mat<T, D, D> M, vec<T, D> augment) {
 	vec<D> solution;
 
 	//forward elimination
@@ -172,19 +152,8 @@ vec<D> solve_system_of_equations(matrix<D, D> M, vec<D> augment) {
 	return solution;
 }
 
-template <unsigned int D>
-void print_vector(vec<D> v) {
-	std::cout << "[";
-	for (int c = 0; c < D; c++) {
-		std::cout << v[c];
-		if (c < D - 1) {
-			std::cout << ", ";
-		}
-	}
-	std::cout << "]";
-}
-template <unsigned int D>
-void print_int_vector(int_vec<D> v) {
+template <typename T, unsigned int D>
+void print_vector(vec<T, D> v) {
 	std::cout << "[";
 	for (int c = 0; c < D; c++) {
 		std::cout << v[c];
@@ -195,8 +164,8 @@ void print_int_vector(int_vec<D> v) {
 	std::cout << "]";
 }
 
-template <unsigned int R, unsigned int C>
-void print_matrix(matrix<R, C> M) {
+template <typename T, unsigned int R, unsigned int C>
+void print_matrix(mat<T, R, C> M) {
 	std::wstring output = L"";
 	for (int i = 0; i < R; i++) {
 		//determine opening and closing characters:

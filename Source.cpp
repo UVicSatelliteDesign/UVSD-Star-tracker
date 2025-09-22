@@ -228,7 +228,7 @@ void test_tiled_identification(database<star> data, unsigned int subdivisions, u
 
 		if (visible_star_count > 3) {
 			test_atlas.get_orientation(centroids, visible_star_count, fov, fov + tile_angle, identification_theshold, normal, &forward, &right, &up, visible_stars, &matches, &top_three_matches, &search_size);
-			vec<3> error = sub_vector(forward, normal);
+			vec<3> error = sub_vecs(forward, normal);
 			total_stars_searched += search_size;
 
 			//print_vector(forward);
