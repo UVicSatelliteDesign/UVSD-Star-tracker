@@ -665,20 +665,20 @@ static void stbiw__linear_to_rgbe(unsigned char* rgbe, float* linear)
     }
 }
 
-static void stbiw__write_run_data(stbi__write_context* s, int length, unsigned char databyte)
+static void stbiw__write_run_data(stbi__write_context* s, int vec_length, unsigned char databyte)
 {
-    unsigned char lengthbyte = STBIW_UCHAR(length + 128);
-    STBIW_ASSERT(length + 128 <= 255);
+    unsigned char lengthbyte = STBIW_UCHAR(vec_length + 128);
+    STBIW_ASSERT(vec_length + 128 <= 255);
     s->func(s->context, &lengthbyte, 1);
     s->func(s->context, &databyte, 1);
 }
 
-static void stbiw__write_dump_data(stbi__write_context* s, int length, unsigned char* data)
+static void stbiw__write_dump_data(stbi__write_context* s, int vec_length, unsigned char* data)
 {
-    unsigned char lengthbyte = STBIW_UCHAR(length);
-    STBIW_ASSERT(length <= 128); // inconsistent with spec but consistent with official code
+    unsigned char lengthbyte = STBIW_UCHAR(vec_length);
+    STBIW_ASSERT(vec_length <= 128); // inconsistent with spec but consistent with official code
     s->func(s->context, &lengthbyte, 1);
-    s->func(s->context, data, length);
+    s->func(s->context, data, vec_length);
 }
 
 static void stbiw__write_hdr_scanline(stbi__write_context* s, int width, int ncomp, unsigned char* scratch, float* scanline)

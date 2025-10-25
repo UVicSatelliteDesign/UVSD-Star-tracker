@@ -7,8 +7,8 @@
 #define PI 3.14159265359
 
 
-vec<3> point_on_sphere(float theta, float phi) {
-	vec<3> v;
+fvec3 point_on_sphere(float theta, float phi) {
+	fvec3 v;
 	v[0] = cos(theta) * cos(phi);
 	v[1] = sin(phi);
 	v[2] = sin(theta) * cos(phi);
@@ -54,7 +54,7 @@ int compare_stars_simple(star a, star b) {
 void find_star_neighbors(binary_node<star, 3>** stars, unsigned int star_count) {
 	feature* stellar_web = new feature[star_count];
 	for (int i = 0; i < star_count; i++) {
-		binary_node<star, 3>** close_stars = find_k_nearest_neighbors<star, 3>(stars[i], stars[i]->components, 3, false);
+		binary_node<star, 3>** close_stars = find_k_nearest_neighbors<star, 3>(stars[i], stars[i]->rows, 3, false);
 		float distances[6];
 		distances[0] = unit_vec_arc_length(stars[i]->key.object->dir, close_stars[0]->key.object->dir);
 		distances[1] = unit_vec_arc_length(stars[i]->key.object->dir, close_stars[1]->key.object->dir);
@@ -80,7 +80,7 @@ feature* find_star_neighbors_redundancy(binary_node<star, 3>** stars, unsigned i
 	feature* stellar_web = new feature[star_count * 4];
 	int s = 0;
 	for (int i = 0; i < star_count; i++) {
-		binary_node<star, 3>** close_stars = find_k_nearest_neighbors<star, 3>(stars[i], stars[i]->components, 6, false);
+		binary_node<star, 3>** close_stars = find_k_nearest_neighbors<star, 3>(stars[i], stars[i]->rows, 6, false);
 
 
 		int neighbors[4][3] = {
@@ -121,7 +121,7 @@ feature* find_star_neighbors_redundancy(binary_node<star, 3>** stars, unsigned i
 	return stellar_web;
 }
 unsigned long long int z_index_from_star(star s) {
-	return  vec_to_z_index(s.dir, vec<3>(-1.0f), vec<3>(1.0f));
+	return  vec_to_z_index(s.dir, { {-1.0f, -1.0f, -1.0f} }, { {1.0f, 1.0f, 1.0f} });
 }
 
 
@@ -129,7 +129,7 @@ unsigned long long int z_index_from_star(star s) {
 star** find_matches(binary_node<star, 6>* root, feature reference, unsigned int quad_count, int match_count) {
 
 
-	int_vec<6> int_components = int_components_from_vec<6>(reference.distances, vec<6>(0.0), vec<6>(1.0));
+	vec<int, 6> int_components = int_components_from_vec<6>(reference.distances, init_vec<float, 6>(0.0), init_vec<float, 6>(1.0));
 
 
 	//construct star quad tree:
@@ -137,7 +137,7 @@ star** find_matches(binary_node<star, 6>* root, feature reference, unsigned int 
 
 
 	//find the cell which the reference quad falls into
-	binary_node<star, 6>* host_cell = find_cell(root, reference.distances, vec<6>(0.0), vec<6>(1.0));
+	binary_node<star, 6>* host_cell = find_cell(root, reference.distances, init_vec<float, 6>(0.0), init_vec<float, 6>(1.0));
 
 
 	//the star quad corresponding to the host cell is not nessessarily the most similar so nearest neighbor search is used:
@@ -152,14 +152,14 @@ star** find_matches(binary_node<star, 6>* root, feature reference, unsigned int 
 	return possible_stars;
 }
 
-feature* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned int star_count) {
+feature* generate_star_quads_from_star_centroids(fvec2* centroids, unsigned int star_count) {
 	feature* star_quads = new feature[star_count];
 	for (int i = 0; i < star_count; i++) {
 		float close_distances[3] = { INFINITY, INFINITY, INFINITY };
-		vec<2>* close_stars[3];
+		fvec2* close_stars[3];
 		for (int j = 0; j < star_count; j++) {
 			if (i != j) {
-				float dist = dist_sq(centroids[i], centroids[j]);
+				float dist = vecs_dist_sq(centroids[i], centroids[j]);
 				if (dist < close_distances[2]) {
 					close_distances[2] = dist;
 					close_stars[2] = centroids + j;
@@ -182,12 +182,12 @@ feature* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned int
 		}
 
 		float distances[6];
-		distances[0] = sqrt(dist_sq(centroids[i], *close_stars[0]));
-		distances[1] = sqrt(dist_sq(centroids[i], *close_stars[1]));
-		distances[2] = sqrt(dist_sq(centroids[i], *close_stars[2]));
-		distances[3] = sqrt(dist_sq(*close_stars[0], *close_stars[1]));
-		distances[4] = sqrt(dist_sq(*close_stars[1], *close_stars[2]));
-		distances[5] = sqrt(dist_sq(*close_stars[2], *close_stars[0]));
+		distances[0] = sqrt(vecs_dist_sq(centroids[i], *close_stars[0]));
+		distances[1] = sqrt(vecs_dist_sq(centroids[i], *close_stars[1]));
+		distances[2] = sqrt(vecs_dist_sq(centroids[i], *close_stars[2]));
+		distances[3] = sqrt(vecs_dist_sq(*close_stars[0], *close_stars[1]));
+		distances[4] = sqrt(vecs_dist_sq(*close_stars[1], *close_stars[2]));
+		distances[5] = sqrt(vecs_dist_sq(*close_stars[2], *close_stars[0]));
 
 
 		float longest = 0.0;
@@ -203,30 +203,30 @@ feature* generate_star_quads_from_star_centroids(vec<2>* centroids, unsigned int
 	return star_quads;
 }
 
-vec<2>* generate_synthetic_image_data(vec<3> normal, float ccw_rotation, float fov, star* stars, unsigned int star_count, unsigned int* visible_star_count, star*** visible_stars_out, float noise, int random_seed) {
-	vec<3> reference_up(0.0);
+fvec2* generate_synthetic_image_data(fvec3 normal, float ccw_rotation, float fov, star* stars, unsigned int star_count, unsigned int* visible_star_count, star*** visible_stars_out, float noise, int random_seed) {
+	fvec3 reference_up = init_vec<float, 3>(0.0f);
 	reference_up[1] = 1.0;
 
-	vec<3> right = normalize(cross(normal, reference_up));
+	fvec3 right = normalize(cross_vecs(normal, reference_up));
 	//apply twist:
-	mat<3, 3> ccw_twist_matrix = rotation_mat(normal, ccw_rotation);
+	mat<float, 3, 3> ccw_twist_matrix = rotation_mat(normal, ccw_rotation);
 	right = normalize(mat_mult_vec(ccw_twist_matrix, right));
 
 
-	vec<3> up = normalize(cross(right, normal));
+	fvec3 up = normalize(cross_vecs(right, normal));
 
 
-	mat<3, 3> pitch_up_matrix = rotation_mat(right, fov / 2);
-	mat<3, 3> pitch_down_matrix = rotation_mat(right, -fov / 2);
-	mat<3, 3> yaw_left_matrix = rotation_mat(up, fov / 2);
-	mat<3, 3> yaw_right_matrix = rotation_mat(up, -fov / 2);
+	mat<float, 3, 3> pitch_up_matrix = rotation_mat(right, fov / 2);
+	mat<float, 3, 3> pitch_down_matrix = rotation_mat(right, -fov / 2);
+	mat<float, 3, 3> yaw_left_matrix = rotation_mat(up, fov / 2);
+	mat<float, 3, 3> yaw_right_matrix = rotation_mat(up, -fov / 2);
 
 
 	//determine the 4 cutting plane normals:
-	vec<3> top_plane = normalize(mat_mult_vec(pitch_up_matrix, up));
-	vec<3> bottom_plane = normalize(mat_mult_vec(pitch_down_matrix, scale_vec(up, -1.0)));
-	vec<3> left_plane = normalize(mat_mult_vec(yaw_left_matrix, scale_vec(right, -1.0)));
-	vec<3> right_plane = normalize(mat_mult_vec(yaw_right_matrix, right));
+	fvec3 top_plane = normalize(mat_mult_vec(pitch_up_matrix, up));
+	fvec3 bottom_plane = normalize(mat_mult_vec(pitch_down_matrix, scale_vec(up, -1.0f)));
+	fvec3 left_plane = normalize(mat_mult_vec(yaw_left_matrix, scale_vec(right, -1.0f)));
+	fvec3 right_plane = normalize(mat_mult_vec(yaw_right_matrix, right));
 
 
 	/*
@@ -252,7 +252,7 @@ vec<2>* generate_synthetic_image_data(vec<3> normal, float ccw_rotation, float f
 	star** visible_stars = new star * [star_count];
 
 	//create array of output vectors:
-	vec<2>* star_centroids = new vec<2>[star_count];
+	fvec2* star_centroids = new fvec2[star_count];
 
 	//Keep track of how many visible stars are in the image
 	*visible_star_count = 0;
@@ -267,7 +267,7 @@ vec<2>* generate_synthetic_image_data(vec<3> normal, float ccw_rotation, float f
 
 	//increment over the aray of stars and pick out the ones which are within the field of view
 	for (unsigned int i = 0; i < star_count; i++) {
-		vec<3> star_norm = stars[i].dir;
+		fvec3 star_norm = stars[i].dir;
 
 
 		//project star direction onto normal axis and get distance:
@@ -284,7 +284,7 @@ vec<2>* generate_synthetic_image_data(vec<3> normal, float ccw_rotation, float f
 
 		if (z > 0.0 && abs(x) < 1.0 && abs(y) < 1.0) {
 			visible_stars[*visible_star_count] = stars + i;
-			star_centroids[*visible_star_count] = vec<2>({ x , y });
+			star_centroids[*visible_star_count] = { {x , y} };
 			(*visible_star_count)++;
 		}
 	}
@@ -295,7 +295,7 @@ vec<2>* generate_synthetic_image_data(vec<3> normal, float ccw_rotation, float f
 }
 
 unsigned long long int z_index_from_star_quad(star s) {
-	return vec_to_z_index(s.primary.distances, vec<6>(0.0), vec<6>(1.0));
+	return vec_to_z_index(s.primary.distances, init_vec<float, 6>(0.0), init_vec<float, 6>(1.0));
 }
 
 std::string RA_to_string(float RA) {
@@ -323,10 +323,10 @@ void synthesize_database(unsigned int star_count, const char* path) {
 	store_database<star>(path, stars, star_count);
 }
 
-void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov, float identification_theshold, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up, star** test_stars, int* matches, int* top_three_matches) {
+void test_orientation_from_centroids(fvec2* centroids, int visible_stars, float fov, float identification_theshold, binary_node<star, 6>* root, fvec3* forward, fvec3* right, fvec3* up, star** test_stars, int* matches, int* top_three_matches) {
 	int variety = 3;
 	//identify edge stars
-	
+
 	//extract possible star quads
 	feature* star_quads = generate_star_quads_from_star_centroids(centroids, visible_stars);
 	star*** star_candidates = new star * *[visible_stars];
@@ -344,8 +344,8 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 	for (int i = 0; i < visible_stars; i++) {
 		for (int j = i + 1; j < visible_stars; j++) {
 			//find the ratio between the distance between the two stars and the distance between the first star and its nearest neghbor:
-			float r = sqrt(dist_sq(centroids[i], centroids[j]));
-			float observed_separation = sqrt(dist_sq(centroids[i], centroids[j])) * fov * 0.5;
+			float r = sqrt(vecs_dist_sq(centroids[i], centroids[j]));
+			float observed_separation = sqrt(vecs_dist_sq(centroids[i], centroids[j])) * fov * 0.5;
 
 			for (int a = 0; a < variety; a++) {
 				for (int b = 0; b < variety; b++) {
@@ -363,7 +363,7 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 						scores[j][b] += 1.0;
 					}
 					*/
-					
+
 				}
 			}
 		}
@@ -404,7 +404,7 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 			}
 		}
 		//if (test_stars[i] == star_candidates[i][local_best_star]) {
-		if (compare_stars_simple(*test_stars[i], *star_candidates[i][local_best_star])){
+		if (compare_stars_simple(*test_stars[i], *star_candidates[i][local_best_star])) {
 			*matches += 1;
 		}
 	}
@@ -417,25 +417,26 @@ void test_orientation_from_centroids(vec<2>* centroids, int visible_stars, float
 	}
 
 	float epsilon = sin(fov / 2);
-	vec<3> alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
-	vec<3> beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;
-	vec<3> gamma = star_candidates[best_stars[2][0]][best_stars[2][1]]->dir;
-	mat<3, 3> coefficents({ {
-		{alpha[0], alpha[1], alpha[2]},
-		{beta[0], beta[1], beta[2]},
-		{gamma[0], gamma[1], gamma[2]}
-	} });
-	vec<3> a1({ epsilon * centroids[best_stars[0][0]][0], epsilon * centroids[best_stars[1][0]][0],epsilon * centroids[best_stars[2][0]][0] });
-	vec<3> a2({ epsilon * centroids[best_stars[0][0]][1], epsilon * centroids[best_stars[1][0]][1],epsilon * centroids[best_stars[2][0]][1] });
+	fvec3 alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
+	fvec3 beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;
+	fvec3 gamma = star_candidates[best_stars[2][0]][best_stars[2][1]]->dir;
+	mat<float, 3, 3> coefficents = { {
+		{{alpha[0], alpha[1], alpha[2]}},
+		{{beta[0], beta[1], beta[2]}},
+		{{gamma[0], gamma[1], gamma[2]}}
+	} };
 
-	vec<3> x = solve_system_of_equations(coefficents, a1);
-	vec<3> y = solve_system_of_equations(coefficents, a2);
+	fvec3 a1({ epsilon * centroids[best_stars[0][0]][0], epsilon * centroids[best_stars[1][0]][0],epsilon * centroids[best_stars[2][0]][0] });
+	fvec3 a2({ epsilon * centroids[best_stars[0][0]][1], epsilon * centroids[best_stars[1][0]][1],epsilon * centroids[best_stars[2][0]][1] });
+
+	fvec3 x = solve_system_of_equations(coefficents, a1);
+	fvec3 y = solve_system_of_equations(coefficents, a2);
 	*right = x;
 	*up = y;
-	*forward = cross(y, x);
+	*forward = cross_vecs(y, x);
 	return;
 }
-void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov, binary_node<star, 6>* root, vec<3>* forward, vec<3>* right, vec<3>* up) {
+void orientation_from_centroids(fvec2* centroids, int visible_stars, float fov, binary_node<star, 6>* root, fvec3* forward, fvec3* right, fvec3* up) {
 	int variety = 3;
 	float threshold = 0.1;
 	//identify edge stars
@@ -458,7 +459,7 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov,
 		for (int j = 0; j < visible_stars; j++) {
 			if (i != j) {
 				//find the ratio between the distance between the two stars and the distance between the first star and its nearest neghbor:
-				float r = sqrt(dist_sq(centroids[i], centroids[j]));
+				float r = sqrt(vecs_dist_sq(centroids[i], centroids[j]));
 
 				for (int a = 0; a < variety; a++) {
 					for (int b = 0; b < variety; b++) {
@@ -512,22 +513,22 @@ void orientation_from_centroids(vec<2>* centroids, int visible_stars, float fov,
 	}
 
 	float epsilon = sin(fov / 2);
-	vec<3> alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
-	vec<3> beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;
-	vec<3> gamma = star_candidates[best_stars[2][0]][best_stars[2][1]]->dir;
-	mat<3, 3> coefficents({ {
-		{alpha[0], alpha[1], alpha[2]},
-		{beta[0], beta[1], beta[2]},
-		{gamma[0], gamma[1], gamma[2]}
-	} });
-	vec<3> a1({ epsilon * centroids[best_stars[0][0]][0], epsilon * centroids[best_stars[1][0]][0],epsilon * centroids[best_stars[2][0]][0] });
-	vec<3> a2({ epsilon * centroids[best_stars[0][0]][1], epsilon * centroids[best_stars[1][0]][1],epsilon * centroids[best_stars[2][0]][1] });
+	fvec3 alpha = star_candidates[best_stars[0][0]][best_stars[0][1]]->dir;
+	fvec3 beta = star_candidates[best_stars[1][0]][best_stars[1][1]]->dir;
+	fvec3 gamma = star_candidates[best_stars[2][0]][best_stars[2][1]]->dir;
+	mat<float, 3, 3> coefficents = { {
+		{{alpha[0], alpha[1], alpha[2]}},
+		{{beta[0], beta[1], beta[2]}},
+		{{gamma[0], gamma[1], gamma[2]}}
+	} };
+	fvec3 a1({ epsilon * centroids[best_stars[0][0]][0], epsilon * centroids[best_stars[1][0]][0],epsilon * centroids[best_stars[2][0]][0] });
+	fvec3 a2({ epsilon * centroids[best_stars[0][0]][1], epsilon * centroids[best_stars[1][0]][1],epsilon * centroids[best_stars[2][0]][1] });
 
-	vec<3> x = solve_system_of_equations(coefficents, a1);
-	vec<3> y = solve_system_of_equations(coefficents, a2);
+	fvec3 x = solve_system_of_equations(coefficents, a1);
+	fvec3 y = solve_system_of_equations(coefficents, a2);
 	*right = x;
 	*up = y;
-	*forward = cross(y, x);
+	*forward = cross_vecs(y, x);
 	return;
 }
 
@@ -550,13 +551,13 @@ sky_atlas::sky_atlas(database<star> data, unsigned int subdivisions) {
 		float direction = (face < 3) * 2.0 - 1.0;
 
 		//the direction of the map is the average of the directions of the 4 corners
-		vec<3> corner_directions[4];
+		fvec3 corner_directions[4];
 		for (int j = 0; j < 4; j++) {
 			corner_directions[j][axis] = direction;
 			corner_directions[j][(axis + 1) % 3] = 2.0 * (float(u + (j + (j / 2) % 2) % 2) / (subdivisions + 1)) - 1.0;
 			corner_directions[j][(axis + 2) % 3] = 2.0 * (float(v + (j / 2) % 2) / (subdivisions + 1)) - 1.0;
 		}
-		vec<3> center_dir;
+		fvec3 center_dir;
 		center_dir[axis] = direction;
 		center_dir[(axis + 1) % 3] = 2.0 * (float(u + 0.5) / (subdivisions + 1)) - 1.0;
 		center_dir[(axis + 2) % 3] = 2.0 * (float(v + 0.5) / (subdivisions + 1)) - 1.0;
@@ -584,7 +585,7 @@ sky_atlas::sky_atlas(database<star> data, unsigned int subdivisions) {
 			}
 		}
 
-		vec<3> vector_sum = { { 0, 0, 0 } };
+		fvec3 vector_sum = { { 0, 0, 0 } };
 		for (int j = 0; j < 3; j++) {
 			for (int k = 0; k < 4; k++) {
 				vector_sum[j] += corner_directions[k][j];
@@ -614,9 +615,9 @@ sky_atlas::sky_atlas(database<star> data, unsigned int subdivisions) {
 	for (int i = 0; i < data.object_count; i++) {
 		//find dot profucts between the direction vector and each axis:
 		float axis_similarities[] = {
-			data.objects[i].dir * vec<3>({1.0, 0.0, 0.0}),
-			data.objects[i].dir * vec<3>({0.0, 1.0, 0.0}),
-			data.objects[i].dir * vec<3>({0.0, 0.0, 1.0})
+			data.objects[i].dir * fvec3({1.0, 0.0, 0.0}),
+			data.objects[i].dir * fvec3({0.0, 1.0, 0.0}),
+			data.objects[i].dir * fvec3({0.0, 0.0, 1.0})
 		};
 
 		//determine the closest axis;
@@ -648,7 +649,7 @@ sky_atlas::sky_atlas(database<star> data, unsigned int subdivisions) {
 	}
 	delete[] indices;
 }
-star* sky_atlas::get_visible_stars(vec<3> dir, float angle, int* star_count) {
+star* sky_atlas::get_visible_stars(fvec3 dir, float angle, int* star_count) {
 	float dot_threshold = cos(angle);
 	bool* maps_needed = new bool[tile_count];
 	unsigned int stars_visible = 0;
@@ -673,7 +674,7 @@ star* sky_atlas::get_visible_stars(vec<3> dir, float angle, int* star_count) {
 	}
 	return stars;
 }
-void sky_atlas::get_orientation(vec<2>* centroids, int visible_stars, float fov, float safety_fov, float identification_theshold, vec<3> estimated_dir, vec<3>* forward, vec<3>* right, vec<3>* up, star** true_stars, int* matches, int *top_three_matches, int* search_size) {
+void sky_atlas::get_orientation(fvec2* centroids, int visible_stars, float fov, float safety_fov, float identification_theshold, fvec3 estimated_dir, fvec3* forward, fvec3* right, fvec3* up, star** true_stars, int* matches, int *top_three_matches, int* search_size) {
 	//get possible stars
 	star* possible_stars = get_visible_stars(estimated_dir, safety_fov, search_size);
 	binary_node<star, 6>* quad_root = generate_binary_tree<star, 6>(possible_stars, *search_size, z_index_from_star_quad);

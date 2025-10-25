@@ -2,57 +2,67 @@
 #include "linear_algebra.h"
 #include <algorithm>
 #include "stb_image_write.h"
+#include <random>
 
 struct star_field_centroid {
 	unsigned int id;
-	vec<2> centroid;
+	fvec2 centroid;
 };
 struct star_field_star {
-	vec<3> direction;
+	fvec3 direction;
 	float magnitude;
-	float bounding_radius;
+	float bounding_radius;//this is just used to speed up the drawing process so that the entire gaussian template isn't copied every time
 };
 
 template <typename T>
-struct image {
+struct bitmap {
 	unsigned int width;
 	unsigned int height;
 	unsigned int channels;
 	T* data;
 };
 struct star_field {
-	image<short> image;
+	bitmap<short> bitmap;
 	unsigned int star_count;
-	star_field_centroid* centroids;
-	matrix<3, 3> orientation;
+	star_field_centroid* centroids;//the centroids of all stars that were visible at any point during the frame
+	mat<float, 3, 3> start_orientation;
+	mat<float, 3, 3> end_orientation;
+	mat<float, 3, 3> average_orientation;//time averaged orientation
 };
 struct star_camera {
 	float aperture;//lens diameter
-	float fov;
-	float aspect_ratio;
+	float fov;//vertical field of view in radians
+	float aspect_ratio;//ratio of the width to the height of the image
 	float focal_length;
-	float quantum_efficeincy;
+	float quantum_efficeincy;//portion of photons which are converted to electons
 	float angular_spread_parameter;
-	float transmittance;
-	float pixel_area;
-	float exposure_time;//amount of time collecting light
+	float transmittance;//the portion of light which passes through the optics and is received at the sensor. Ideally 100%
+	float pixel_area;//The physical size of a single pixel on the sensor. Which may be smaller than the area of the sensor divided by the number of pixels, hence why it is a separate parameter.
 	float frame_interval;//amound of time between frames (realistically longer than the exposure time)
 	float sensor_size;//height of the sensor
 	unsigned int width;//image width in pixels
 	unsigned int height;//image height in pixels
 	unsigned int full_well;//number of electrons required to saturate a pixel
+
+	//this should probably be part of a separate structure describing the capture parameters, as it's not an attribute of the optical system itself.
+	float exposure_time;//amount of time collecting light
+
 };
 struct star_field_generator {
 	star_camera camera;
+	unsigned int star_count;
 	star_field_star* stars;
-	matrix<3, 3>(*path)(float);
-	float* guassian_template;
+	bool positional_noise;
+	std::default_random_engine generator;
+	std::normal_distribution<float> distribution;
+	mat<float, 3, 3>(*path)(float);
+	bitmap<float> guassian_template;
 };
 star_camera default_star_camera();
 
 template <typename T>
-image<T> initialize_image(unsigned int width, unsigned height, unsigned int channels, T initial_value) {
-	image<T> img;
+bitmap<T> init_bitmap(unsigned int width, unsigned height, unsigned int channels, T initial_value) {
+	bitmap<T> img;
 	img.width = width;
 	img.height = height;
 	img.channels = channels;
@@ -65,8 +75,8 @@ image<T> initialize_image(unsigned int width, unsigned height, unsigned int chan
 }
 
 template <typename T>
-image<T> initialize_checkerboard(unsigned int width, unsigned int height, unsigned int channels, T high_value, unsigned int period) {
-	image<T> img;
+bitmap<T> init_checkerboard(unsigned int width, unsigned int height, unsigned int channels, T high_value, unsigned int period) {
+	bitmap<T> img;
 	img.width = width;
 	img.height = height;
 	img.channels = channels;
@@ -86,12 +96,13 @@ image<T> initialize_checkerboard(unsigned int width, unsigned int height, unsign
 }
 
 template <typename T>
-void image_set_at(image<T> img, unsigned int x, unsigned int y, T val) {
-	img.data[img.channels * (img.width * y + x)] = val;
+void image_set_at(bitmap<T>* img, unsigned int x, unsigned int y, T val) {
+	img->data[img->channels * (img->width * y + x)] = val;
 }
+
 template <typename T>
-T image_get_at(image<T> img, unsigned int x, unsigned int y, bool extend) {
-	if (!vec_in_span(uvec2({ x,y }), urect(uvec2({ 0, 0 }), uvec2({ img.width, img.height })))) {
+T image_get_at(bitmap<T> img, unsigned int x, unsigned int y, bool extend) {
+	if (!vec_in_span<unsigned int, 2>({{ x,y } }, { { { 0u, 0u } }, { { img.width - 1, img.height - 1 } } })) {
 		if (extend) {
 			x = std::clamp<int>(x, 0, img.width - 1);
 			y = std::clamp<int>(y, 0, img.height - 1);
@@ -99,39 +110,38 @@ T image_get_at(image<T> img, unsigned int x, unsigned int y, bool extend) {
 		}
 		return T(0);
 	}
-	x = std::clamp<int>(x, 0, img.width - 1);
-	y = std::clamp<int>(y, 0, img.height - 1);
 	return img.data[img.channels * (img.width * y + x)];
-}
-template <typename T>
-void image_add_at(image<T> img, unsigned int x, unsigned int y, T val) {
-	img.data[img.channels * (img.width * y + x)] += val;
 }
 
 template <typename T>
-void super_impose_image(image<T> source, image<T> destination, vec2 offset) {
+void image_add_at(bitmap<T>* img, unsigned int x, unsigned int y, T val) {
+	img->data[img->channels * (img->width * y + x)] += val;
+}
+
+template <typename T>
+void super_impose_image(bitmap<T> source, bitmap<T>* destination, fvec2 offset) {
 	//the offset is the position of the bottom left corner of the source image relative to the bottom left corner of the destintion image
-	rect source_area = offset_span(rect(vec2(0.0), vec2({ float(source.width), float(source.height) })), offset);
-	rect destination_area = rect(vec2(0.0), vec2({ float(destination.width), float(destination.height) }));
-	rect overlap = clamp_rect(source_area, destination_area);
-	rect working_area = expand_span_to_grid(overlap, vec2(0.0), 1.0f);//irect(offset_span(overlap, negate_vector(offset)));
+	frect source_area = { {{0.0f, 0.0f}},{{(float)source.width, (float)source.height}} };
+	frect destination_area = { {{0.0f, 0.0f}},{{(float)destination->width, (float)destination->height}} };//rect(vec2(0.0), vec2({ float(destination.width), float(destination.height) }));
+	frect destination_overlap = expand_span_to_grid(span_overlap(source_area + offset, destination_area), { {0.0f,0.0f} }, { {1.0f, 1.0f} });
+	frect source_overlap = expand_span_to_grid(destination_overlap - offset, { {0.0f,0.0f} }, { {1.0f, 1.0f} });
 	/*
                  
-		+------------------------------+
-		|           Source             |
-		|                              |
-		|           +------------------+-----------+
-		|           |     Overlap      |           |
-		|           |                  |           |
-		|           |                  |           |
-		|           |                  |           |
-		+-----------+------------------+           |
-	     ^ offset   |                              |
-	       \        |                              |
-	         \      |                              |
-	           \    |                              |
-	             \  |          Destination         |
-	               \+------------------------------+
+		+------------------------------+								+------------------------------+	+------------------+-----------+	
+		|           Source             |								|           Source             |	| Destination      |           |
+		|                              |								|                              |	|   Overlap        |           |
+		|           +------------------+-----------+					|           +------------------+	|                  |           |
+		|           |     Overlap      |           |					|           | Source Overlap   |	|                  |           |
+		|           |                  |           |					|           |                  |	+------------------+           |
+		|           |                  |           |					|           |                  |	|                              |
+		|           |                  |           |					|           |                  |	|                              |
+		+-----------+------------------+           |	------------->	0-----------+------------------+	|                              |
+	     ^ offset   |                              |														|                              |
+	       \        |                              |														|          Destination         |
+	         \      |                              |														0------------------------------+
+	           \    |                              |														
+	             \  |          Destination         |														
+	               \+------------------------------+														
 	*/
 
 	//compute distribution from offset:
@@ -140,47 +150,50 @@ void super_impose_image(image<T> source, image<T> destination, vec2 offset) {
 		|          |          |
 		|          |          |      
 		|     +----|----+     |      i   = (1-a)*(1-b)
-		|   b | iii| iv |     |      ii  = a*(1-b)	
+		|(1-b)| iii| iv |     |      ii  = a*(1-b)	
 		+----------+----------+      iii = (1-a)*b
-		|(1-b)| i  | ii |     |		 iv  = a*b
+		|   b | i  | ii |     |		 iv  = a*b
 		|     +----|----+     |
-		|    (1-a) |  a       |
+		|        a |  (1-a)   |
 		|          |          |
 		+----------+----------+
 	
 	
 	*/
-	vec2 modular_offset = mod_vector(offset, 1.0f);
+
+	fvec2 modular_offset = mod_vec(offset, 1.0f);
 	float a = abs(modular_offset[0]);
 	float b = abs(modular_offset[1]);
+
 	float pixel_weights[2][2] = 
 	{ 
-		{(1.0 - a) * (1.0 - b),		a * (1.0 - b)	}, 
-		{(1.0 - a) * b,				a * b		}
+		{a * b,				(1.0f - a) * b	},
+		{a * (1.0f - b),	(1.0f - a) * (1.0f - b)		}
 	};
 
-	ivec2 source_offsets[2][2] =
-	{
-		{ivec2({(int)floor(-offset[0]), (int)floor(-offset[1])}),		ivec2({(int)floor(-offset[0]) + 1, (int)floor(-offset[1])})},
-		{ivec2({(int)floor(-offset[0]), (int)floor(-offset[1]) + 1}),	ivec2({(int)floor(-offset[0]) + 1, (int)floor(-offset[1]) + 1})}
-	};
+	int source_x = source_overlap.min[0];
+	int source_y = source_overlap.min[1];
+	for (int destination_x = destination_overlap.min[0]; destination_x < destination_overlap.max[0]; destination_x++) {
+		source_y = source_overlap.min[0];
+		for (int destination_y = destination_overlap.min[1]; destination_y < destination_overlap.max[1]; destination_y++) {
 
-	for (int x = working_area.min[0]; x < working_area.max[0]; x++) {
-		for (int y = working_area.min[1]; y < working_area.max[1]; y++) {
 			float val = (
-				pixel_weights[0][0] * image_get_at(source, x + source_offsets[0][0][0], y + source_offsets[0][0][1], false) +
-				pixel_weights[0][1] * image_get_at(source, x + source_offsets[0][1][0], y + source_offsets[0][1][1], false) +
-				pixel_weights[1][0] * image_get_at(source, x + source_offsets[1][0][0], y + source_offsets[1][0][1], false) +
-				pixel_weights[1][1] * image_get_at(source, x + source_offsets[1][1][0], y + source_offsets[1][1][1], false)
+				pixel_weights[0][0] * image_get_at(source, source_x, source_y, false)+
+				pixel_weights[1][0] * image_get_at(source, source_x + 1, source_y, false)+
+				pixel_weights[0][1] * image_get_at(source, source_x, source_y + 1, false)+
+				pixel_weights[1][1] * image_get_at(source, source_x + 1, source_y + 1, false)
 			);
-			image_add_at(destination, x, y, (T)val);
+			image_add_at(destination, destination_x, destination_y, val);
+
+			source_y++;
 		}
+		source_x++;
 	}
 };
 
 template <typename T, typename U>
-image<T> image_cast(image<U> img, U max_in, T max_out) {
-	image<T> out;
+bitmap<T> bitmap_cast(bitmap<U> img, U max_in, T max_out) {
+	bitmap<T> out;
 	out.channels = img.channels;
 	out.width = img.width;
 	out.height = img.height;
@@ -192,10 +205,10 @@ image<T> image_cast(image<U> img, U max_in, T max_out) {
 	return out;
 }
 
-void write_image_to_png(const char* path, image<unsigned char> img);
+void write_bitmap_to_png(const char* path, bitmap<unsigned char> img);
 
 float compute_apparent_star_radius(star_camera camera, star_field_star star);
-void compute_guassian_template(star_field_generator gen);
-star_field generate_star_field(star_field_generator gen, float time);
+bitmap<float> generate_gaussian_image(unsigned int image_size, float scale, float standard_deviation);
+star_field generate_star_field(star_field_generator gen, float start_time, float end_time);
 
 unsigned short** simulate_image(int width, int height, int adc_bits);

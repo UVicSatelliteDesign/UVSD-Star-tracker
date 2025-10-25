@@ -20,7 +20,7 @@ unsigned short** simulate_image(int width, int height, int adc_bits) {
 	float threshold_flux_density = 0.001;
 
 	int time_steps = 25;
-	vec<2>** centroids = new vec<2>*[time_steps];
+	fvec2** centroids = new fvec2*[time_steps];
 	for (int i = 0; i < time_steps; i++) {
 		//project stars onto image plane
 
@@ -85,8 +85,8 @@ unsigned short** simulate_image(int width, int height, int adc_bits) {
 			for (int i = bottom; i < top; i++) {
 				float x = min_x;
 				for (int j = left; j < right; j++) {
-					float dist_sq = (x - center_x) * (x - center_x) + (y - center_y) * (y - center_y);
-					flux[i][j] += magnitude * 2500.0 * exp(-0.5 * dist_sq / (0.0003 * 0.0003));
+					float vecs_dist_sq = (x - center_x) * (x - center_x) + (y - center_y) * (y - center_y);
+					flux[i][j] += magnitude * 2500.0 * exp(-0.5 * vecs_dist_sq / (0.0003 * 0.0003));
 					x += x_step;
 				}
 				y += y_step;
@@ -133,10 +133,132 @@ unsigned short** simulate_image(int width, int height, int adc_bits) {
 float compute_apparent_star_radius(star_camera camera, star_field_star star) {
 	return 0.0;
 }
-void compute_guassian_template(star_field_generator gen) {
-	float brightest_magnitude = -1.0;
+void compute_guassian_template(star_field_generator* gen) {
+	//compute the angular size of one pixel
+	float pixel_angle = gen->camera.fov / gen->camera.height;
+
+	//convert the standard deviation of the point spread from angular to 
+	float sigma = gen->camera.angular_spread_parameter / pixel_angle;
+
+	//choose an image size the at least covers the desired region
+	unsigned int image_size = ceil(4 * sigma);
+
+	//make sure the image size is an odd number to ensure the the brightest part of the distribution is preserved
+	image_size += (1 - image_size % 2);
+
+	//generate the distribution
+	gen->guassian_template = generate_gaussian_image(image_size, image_size * pixel_angle, gen->camera.angular_spread_parameter);
 }
-void write_image_to_png(const char* path, image<unsigned char> img) {
+bitmap<float> generate_gaussian_image(unsigned int image_size, float scale, float standard_deviation) {
+	bitmap<float> image = init_bitmap(image_size, image_size, 1, 0.0f);
+	float normalization_factor = 1.0 / (2.0 * std::_Pi * standard_deviation * standard_deviation);
+	float exponent_coefficient = -0.5 / (standard_deviation * standard_deviation);
+	float step = scale / image_size;
+	float x = -scale * 0.5 + 0.5 * step;
+	for (int i = 0; i < image_size; i++) {
+		float y = -scale * 0.5 + 0.5 * step;
+		for (int j = 0; j < image_size; j++) {
+			float intensity = normalization_factor * exp(exponent_coefficient * (x * x + y * y));
+			image_set_at(&image, i, j, intensity);
+			y += step;
+		}
+		x += step;
+	}	
+	return image;
+}
+star_field_centroid* get_centroids_from_star_field_generator(star_field_generator gen, mat<float, 3, 3> orientation) {
+	//
+	mat<float, 3, 3> pitch_up_matrix = rotation_mat(orientation[0], gen.camera.fov / 2);
+	mat<float, 3, 3> pitch_down_matrix = rotation_mat(orientation[0], -gen.camera.fov / 2);
+	mat<float, 3, 3> yaw_left_matrix = rotation_mat(orientation[1], gen.camera.fov / 2);
+	mat<float, 3, 3> yaw_right_matrix = rotation_mat(orientation[1], -gen.camera.fov / 2);
+
+
+	//determine the 4 cutting plane normals:
+	fvec3 top_plane = normalize(mat_mult_vec(pitch_up_matrix, orientation[1]));
+	fvec3 bottom_plane = normalize(mat_mult_vec(pitch_down_matrix, scale_vec(orientation[1], -1.0f)));
+	fvec3 left_plane = normalize(mat_mult_vec(yaw_left_matrix, scale_vec(orientation[0], -1.0f)));
+	fvec3 right_plane = normalize(mat_mult_vec(yaw_right_matrix, orientation[0]));
+
+	unsigned int visible_star_count = 0;
+	star_field_star** visible_stars = new star_field_star* [gen.star_count];
+
+	//create array of output vectors:
+	star_field_centroid* centroids = new star_field_centroid[gen.star_count];
+
+
+	for (unsigned int i = 0; i < gen.star_count; i++) {
+		//project the star's direction onto the orientation basis
+		fvec3 frustum_position = transpose(orientation) * gen.stars[i].direction;
+		fvec2 centroid = init_vec<float, 2>({frustum_position[0], frustum_position[1]}) * (1.0 / frustum_position[0]);
+		if (gen.positional_noise) {
+			centroid += {{gen.distribution(gen.generator), gen.distribution(gen.generator)}};
+		}
+		if (vec_in_span(centroid, { {-1.0f, 1.0f}, {-1.0f, 1.0f} })) {
+
+		}
+	}
+}
+star_field generate_star_field(star_field_generator gen, float start_time, float end_time) {
+	//number of standard deviations between each neighboring point in the exposure
+	const float gaussian_spacing = 0.25;
+	
+	//compute first and last orientation matrices
+	mat<float, 3, 3> start_matrix = gen.path(start_time);
+	mat<float, 3, 3> end_matrix = gen.path(end_time);
+
+	//apply these matrices to the four corners of the frame.
+	//these points will have the greatest apparant motion
+	float y_offset = tan(gen.camera.fov / 2);
+	float x_offset = gen.camera.aspect_ratio * y_offset;
+	fvec3 top_left = init_vec({ 1.0f, -x_offset, y_offset });
+	fvec3 top_right = init_vec({ 1.0f, x_offset, y_offset });
+	fvec3 bottom_left = init_vec({ 1.0f, -x_offset, -y_offset });
+	fvec3 bottom_right = init_vec({ 1.0f, x_offset, -y_offset });
+	fvec3 start_top_left = start_matrix * top_left;
+	fvec3 start_top_right = start_matrix * top_right;
+	fvec3 start_bottom_left = start_matrix * bottom_left;
+	fvec3 start_bottom_right = start_matrix * bottom_right;
+	fvec3 end_top_left = end_matrix * top_left;
+	fvec3 end_top_right = end_matrix * top_right;
+	fvec3 end_bottom_left = end_matrix * bottom_left;
+	fvec3 end_bottom_right = end_matrix * bottom_right;
+
+	//Determine which points moved the most as an estimate on how far stars can move during the frame
+	float rotation_angles[] = {
+		vec_arc_length(start_top_left, end_top_left),
+		vec_arc_length(start_top_right, end_top_right),
+		vec_arc_length(start_bottom_left, end_bottom_left),
+		vec_arc_length(start_bottom_right, end_bottom_right)
+	};
+	float largest_angle = 0.0f;
+	for (int i = 0; i < 4; i++) {
+		if (rotation_angles[i] > largest_angle) {
+			largest_angle = rotation_angles[i];
+		}
+	}
+
+	//determine the time step necesarry to acheive the desired smoothness
+	int steps = ceil(largest_angle / (gaussian_spacing * gen.camera.angular_spread_parameter));
+	float time_step = (end_time - start_time) / (steps - 1);
+
+	//compute orientation matrices:
+	mat<float, 3, 3>* orientations = new mat<float, 3, 3>[steps];
+	mat<float, 3, 3> average_orientation = gen.path(0.5 * (start_time + end_time));
+	float time = start_time;
+	for (int i = 0; i < steps; i++) {
+		orientations[i] = gen.path(time);
+		average_orientation += orientations[i];
+		time += time_step;
+	}
+
+
+	//Initialize flux bitmap
+	bitmap flux_bitmap= init_bitmap(gen.camera.width, gen.camera.height, 1, 0.0f);
+	
+
+}
+void write_bitmap_to_png(const char* path, bitmap<unsigned char> img) {
 	stbi_flip_vertically_on_write(true);
 	stbi_write_png(path, img.width, img.height, img.channels, img.data, 0);
 }

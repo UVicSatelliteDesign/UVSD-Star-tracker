@@ -8,10 +8,10 @@
 
 #include "database.h"
 #include "astrometry.h"
+#include "sensor_sim.h"
 #include "linear_algebra.h"
 #include "trees.h"
 #define PI 3.14159265359
-
 void test_star_quad_identification_succes_rate_vs_noise(database<star> data, unsigned int star_limit, unsigned int samples, float start_noise, float end_noise, unsigned int steps, const char* folder) {
 	if (star_limit > data.object_count) {
 		star_limit = data.object_count;
@@ -65,8 +65,8 @@ void test_edge_star_proportion_vs_stars_fov(database<star> data, unsigned int sa
 		for (int s = 0; s < samples; s++) {
 			star** visible_stars;
 			unsigned int visible_star_count = 0;
-			vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
-			vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0, seed++);
+			fvec3 normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
+			fvec2* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0, seed++);
 			if (visible_star_count > 3) {
 				feature* image_quads = generate_star_quads_from_star_centroids(centroids, visible_star_count);
 				for (int j = 0; j < visible_star_count; j++) {
@@ -176,13 +176,13 @@ void test_identification(database<star> data, int samples) {
 	binary_node<star, 6>* quad_root = generate_binary_tree<star, 6>(data.objects, data.object_count, z_index_from_star_quad);
 	for (int s = 0; s < samples; s++) {
 		star** visible_stars;
-		vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
+		fvec3 normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
 
-		vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0, seed++);
+		fvec2* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, 0.0, seed++);
 
-		vec<3> right;
-		vec<3> up;
-		vec<3> forward;
+		fvec3 right;
+		fvec3 up;
+		fvec3 forward;
 		int matches = 0;
 		int top_three_matches = 0;
 		if (visible_star_count >= 3) {
@@ -217,18 +217,18 @@ void test_tiled_identification(database<star> data, unsigned int subdivisions, u
 
 		star** visible_stars;
 		unsigned int visible_star_count = 0;
-		vec<3> normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
-		vec<2>* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, proportional_position_noise, seed++);
+		fvec3 normal = point_on_sphere(random_float(seed++) * 6.28, asin(random_float(seed++) * 2.0 - 1.0));
+		fvec2* centroids = generate_synthetic_image_data(normal, random_float(seed++) * 6.28, fov, data.objects, data.object_count, &visible_star_count, &visible_stars, proportional_position_noise, seed++);
 		int matches = 0;
-		vec<3> right;
-		vec<3> up;
-		vec<3> forward;
+		fvec3 right;
+		fvec3 up;
+		fvec3 forward;
 		int top_three_matches = 0;
 		int search_size = 0;
 
 		if (visible_star_count > 3) {
 			test_atlas.get_orientation(centroids, visible_star_count, fov, fov + tile_angle, identification_theshold, normal, &forward, &right, &up, visible_stars, &matches, &top_three_matches, &search_size);
-			vec<3> error = sub_vecs(forward, normal);
+			fvec3 error = sub_vecs(forward, normal);
 			total_stars_searched += search_size;
 
 			//print_vector(forward);
@@ -282,5 +282,12 @@ int main() {
 	//test_average_distance(data, 150000, test_folder);
 	//test_edge_star_proportion_vs_stars_fov(data, 1000, 0.1, 1.5, 250, "C:/Users/logac/Desktop/UVSD Star tracker/tests/");
 	//export_synthetic_centroids(data, 0.5, 0.3, 0.0, 1.5, test_folder);
+	
+	bitmap stamp = init_checkerboard(25, 25, 1, 1.0f, 4);
+	bitmap canvas = init_bitmap(16, 16, 1, 0.0f);
+	bitmap gauss_blob = generate_gaussian_image(60, 6.0, 2.0);
+	super_impose_image(gauss_blob, &canvas, { {0.2f, 0.2f} });
+	write_bitmap_to_png("./test_img.png", bitmap_cast(gauss_blob, 1.0f, (unsigned char)255));
+	
 	return 0;
 }

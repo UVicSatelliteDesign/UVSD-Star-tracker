@@ -17,7 +17,7 @@ template <typename T, unsigned int D>
 struct binary_node {
 	//the key must have a z-index element
 	key_z_index_pair<T> key;
-	int_vec<D> components;
+	vec<int, D> rows;
 	unsigned long long int split_position;
 	int split_direction;//the direction can be infered by the remainder after dividing by 3 0 for x, 1 for y and 2 for z, -1 for undivided. This can also be used to check if there are child nodes
 	binary_node* left;
@@ -380,7 +380,7 @@ ________________________________________________________________________________
 }
 
 template <unsigned int D>
-unsigned long long int clamped_vec_to_z_index(vec<D> v) {
+unsigned long long int clamped_vec_to_z_index(vec<float, D> v) {
 	//assumes that all compoents of v are in the range 0.0 to 1.0
 	unsigned long long int Z = 0;
 	for (int i = 0; i < D; i++) {
@@ -390,7 +390,7 @@ unsigned long long int clamped_vec_to_z_index(vec<D> v) {
 	return Z;
 }
 template <unsigned int D>
-unsigned long long int vec_to_z_index(vec<D> v, vec<D> min, vec<D> max) {
+unsigned long long int vec_to_z_index(vec<float, D> v, vec<float, D> min, vec<float, D> max) {
 	unsigned long long int Z = 0;
 	for (int i = 0; i < D; i++) {
 		Z += spread_bits<D>((unsigned long long int)(((v[i] - min[i]) / (max[i] - min[i])) * ((1 << ((64 - (64 % D)) / D)) - 1))) << i;
@@ -398,15 +398,15 @@ unsigned long long int vec_to_z_index(vec<D> v, vec<D> min, vec<D> max) {
 	return Z;
 }
 template <unsigned int D>
-int_vec<D> int_components_from_vec(vec<D> v, vec<D> min, vec<D> max) {
-	int_vec<D> V;
+vec<int, D> int_components_from_vec(vec<float, D> v, vec<float, D> min, vec<float, D> max) {
+	vec<int, D> V;
 	for (int i = 0; i < D; i++) {
 		V[i] = ((v[i] - min[i]) / (max[i] - min[i])) * ((1 << ((64 - (64 % D)) / D)) - 1);
 	}
 	return V;
 }
 template <unsigned int D>
-vec<D> z_index_to_vec(unsigned long long int Z, vec<D> min, vec<D> max) {
+vec<float, D> z_index_to_vec(unsigned long long int Z, vec<float, D> min, vec<float, D> max) {
 	vec<D> v;
 	for (int i = 0; i < D; i++) {
 		v[i] = cluster_bits<D>(Z) * (max[i] - min[i]) + min[i];
@@ -486,7 +486,7 @@ binary_node<T, D>* divide_cell(key_z_index_pair<T>* pairs, unsigned int first, u
 		-1,
 		NULL, NULL, NULL, NULL });
 	for (int i = 0; i < D; i++) {
-		node->components[i] = extract_int_component<D>(z_index, i);
+		node->rows[i] = extract_int_component<D>(z_index, i);
 	}
 	if (last - first > 0) {
 		left = divide_cell<T, D>(pairs, first, split_index);
@@ -590,17 +590,17 @@ T** brute_force_neighbors(T* objects, unsigned int object_count, binary_node<T, 
 
 
 template <typename T, unsigned int D>
-long long int split_plane_dist(binary_node<T, D>* node, int_vec<D> reference) {
+long long int split_plane_dist(binary_node<T, D>* node, vec<int, D> reference) {
 	long long int split_plane = node->split_position;//*(reinterpret_cast<float*>(node->position) + node->split_direction);
 	long long int point_pos = reference[node->split_direction];//*(reinterpret_cast<float*>(&reference->key->dir) + node->split_direction);
 	long long int delta = point_pos - split_plane;
 	return delta;
 }
 template <typename T, unsigned int D>
-unsigned long long int dist_to_node(binary_node<T, D>* a, int_vec<D> v) {
+unsigned long long int dist_to_node(binary_node<T, D>* a, vec<int, D> v) {
 	unsigned long long int distance_squared = 0;
 	for (int i = 0; i < D; i++) {
-		unsigned long long int c1 = a->components[i];
+		unsigned long long int c1 = a->rows[i];
 		unsigned long long int c2 = v[i];
 		unsigned long long int delta;
 		if (c1 < c2) {
@@ -618,7 +618,7 @@ unsigned long long int dist_to_node(binary_node<T, D>* a, int_vec<D> v) {
 
 
 template <typename T, unsigned int D>
-void inspect_node(binary_node<T, D>* node, binary_node<T, D>** neighbors, unsigned long long int* distances, int_vec<D> reference, unsigned int k) {
+void inspect_node(binary_node<T, D>* node, binary_node<T, D>** neighbors, unsigned long long int* distances, vec<int, D> reference, unsigned int k) {
 	/*
 	std::cout << "Visited child node: ";
 	print_vector<D>(*node->key.object);
@@ -672,7 +672,7 @@ void inspect_node(binary_node<T, D>* node, binary_node<T, D>** neighbors, unsign
 	}
 }
 template <typename T, unsigned int D>
-binary_node<T, D>** find_k_nearest_neighbors(binary_node<T, D>* host, int_vec<D> reference, unsigned int k, int log) {
+binary_node<T, D>** find_k_nearest_neighbors(binary_node<T, D>* host, vec<int, D> reference, unsigned int k, int log) {
 	binary_node<T, D>** neighbors = new binary_node<T, D> *[k];
 
 
@@ -725,9 +725,9 @@ binary_node<T, D>** find_k_nearest_neighbors(binary_node<T, D>* host, int_vec<D>
 	return neighbors;
 }
 template <typename T, unsigned int D>
-binary_node<T, D>* find_cell(binary_node<T, D>* root, vec<D> v, vec<D> min, vec<D> max) {
+binary_node<T, D>* find_cell(binary_node<T, D>* root, vec<float, D> v, vec<float, D> min, vec<float, D> max) {
 	//compute the integer components of the vector:
-	int_vec<D> int_components;
+	vec<int, D> int_components;
 	for (int i = 0; i < D; i++) {
 		int_components[i] = (unsigned long long int)(((v[i] - min[i]) / (max[i] - min[i])) * (1 << ((64 - (64 % D)) / D)));
 	}
@@ -825,7 +825,7 @@ void print_tree(binary_node<T, D>* node, void (*print_object)(T) = NULL) {
 
 
 	std::cout << " dir: " << node->split_direction << " pos: " << node->split_position << "\t";
-	print_int_vector<D>(node->components);
+	//print_int_vector<D>(node->components);
 	std::cout << "\n";
 	//check if there are child nodes
 	if (node->split_direction != -1) {
