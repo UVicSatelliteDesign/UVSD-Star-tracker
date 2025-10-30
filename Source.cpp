@@ -258,7 +258,9 @@ void test_tiled_identification(database<star> data, unsigned int subdivisions, u
 
 }
 
-
+mat<float, 3, 3> test_path(float t) {
+	return rotation_mat({ {0.0f, 1.0f, 0.0f} }, t);
+}
 int main() {
 	srand(34);
 	std::setprecision(4);
@@ -287,7 +289,30 @@ int main() {
 	bitmap canvas = init_bitmap(16, 16, 1, 0.0f);
 	bitmap gauss_blob = generate_gaussian_image(60, 6.0, 2.0);
 	super_impose_image(gauss_blob, &canvas, { {0.2f, 0.2f} });
-	write_bitmap_to_png("./test_img.png", bitmap_cast(gauss_blob, 1.0f, (unsigned char)255));
+
+	star_camera camera;
+	camera.fov = PI / 4;
+	camera.aspect_ratio = 1920 / 1080;
+	camera.width = 1920;
+	camera.height = 1080;
+	camera.aperture = 0.05;
+	camera.sensor_size = 0.02;
+	camera.pixel_area = 0.75 * camera.sensor_size * camera.sensor_size * camera.aspect_ratio / (camera.width * camera.height);
+	camera.quantum_efficeincy = 0.5;
+	camera.full_well = 10000;
+	camera.transmittance = 0.8;
+	camera.focal_length = camera.sensor_size / (2 * sin(camera.fov / 2));
+
+	star_field_generator generator;
+	generator.camera = camera;
+	generator.frame_interval = 1.0;
+	generator.exposure_time = 0.95;
+	generator.positional_noise = false;
+	generator.path = test_path;
+
+	star_field test_field = generate_star_field(generator, 0.0, 0.5);
+
+	write_bitmap_to_png("./test_starfield.png", bitmap_cast(test_field.bitmap, (short)generator.camera.full_well, (unsigned char)255));
 	
 	return 0;
 }

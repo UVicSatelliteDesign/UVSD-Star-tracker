@@ -9,31 +9,31 @@
 
 template <typename T, unsigned int D>
 struct vec {
-	T rows[D];
+	T components[D];
 
 	T& operator [](unsigned int i) {
-		return rows[i];
+		return components[i];
 	}
 	vec operator+ (vec v) {
 		for (int i = 0; i < D; i++) {
-			v[i] += rows[i];
+			v[i] += components[i];
 		}
 		return v;
 	}
 	void operator+= (vec v) {
 		for (int i = 0; i < D; i++) {
-			rows[i] += v[i];
+			components[i] += v[i];
 		}
 	}
 	vec operator- (vec v) {
 		for (int i = 0; i < D; i++) {
-			v[i] = rows[i] - v[i];
+			v[i] = components[i] - v[i];
 		}
 		return v;
 	}
 	void operator-= (vec v) {
 		for (int i = 0; i < D; i++) {
-			rows[i] -= v[i];
+			components[i] -= v[i];
 		}
 	}
 	float operator* (vec v) {
@@ -47,14 +47,14 @@ struct vec {
 	vec operator* (U s) {
 		vec out;
 		for (int i = 0; i < D; i++) {
-			out[i] = rows[i] * s;
+			out[i] = components[i] * s;
 		}
 		return out;
 	}
 	template <typename U>
 	vec operator*= (U s) {
 		for (int i = 0; i < D; i++) {
-			rows[i] *= s;
+			components[i] *= s;
 		}
 	}
 };
@@ -89,14 +89,13 @@ struct mat {
 		for (int i = 0; i < R; i++) {
 				rows[i] += m[i];
 		}
-		return m;
 	}
 	vec<T, R> operator *(vec<T, C> v) {
 		vec<T, R> out;
 		for (int i = 0; i < R; i++) {
 			float sum = 0.0;
 			for (int j = 0; j < C; j++) {
-				sum += m[i][j] * v[j];
+				sum += rows[i][j] * v[j];
 			}
 			out[i] = sum;
 		}
@@ -157,7 +156,14 @@ vec<T, D> scale_vec(vec<T, D> v, U scale) {
 	}
 	return v;
 }
-
+template <typename T, unsigned int D>
+float dot_vec(vec<T, D> a, vec<T, D> b) {
+	float product = 0.0f;
+	for (int i = 0; i < D; i++) {
+		product += a[i] * b[i];
+	}
+	return product;
+}
 template <typename T, unsigned int D>
 vec<T, D> mod_vec(vec<T, D> v, float period) {
 	for (int i = 0; i < D; i++) {
@@ -203,7 +209,7 @@ vec<T, D> scale_vec(vec<T, D> v, T s) {
 
 template <typename T, unsigned int D>
 float vec_length(vec<T, D> v) {
-	return sqrt(dot(v, v));
+	return sqrt(dot_vec(v, v));
 }
 template <typename T, unsigned int D>
 vec<T, D> normalize(vec<T, D> v) {
@@ -252,7 +258,7 @@ float unit_vec_arc_length(vec<T, D> a, vec<T, D> b) {
 template <typename T, unsigned int D>
 float vec_arc_length(vec<T, D> a, vec<T, D> b) {
 	//return the arc length between two unit vectors
-	return acos(a * b / (vec_length(a) * vec_arc_length(b)));
+	return acos(a * b / (vec_length(a) * vec_length(b)));
 }
 
 template <typename T, unsigned int D>
@@ -285,11 +291,11 @@ vec<T, D> solve_system_of_equations(mat<T, D, D> M, vec<T, D> augment) {
 
 
 template <typename T, unsigned int R, unsigned int C>
-mat<T, C, R> transpose(mat<T, R, C> M) {
+mat<T, C, R> transpose(mat<T, R, C> m) {
 	mat<T, C, R> out;
 	for (int i = 0; i < C; i++) {
 		for (int j = 0; j < R; j++) {
-			out[j][i] = rows[i][j]
+			out[j][i] = m.rows[i][j];
 		}
 	}
 	return out;

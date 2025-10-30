@@ -30,22 +30,24 @@ struct star_field {
 	mat<float, 3, 3> average_orientation;//time averaged orientation
 };
 struct star_camera {
-	float aperture;//lens diameter
+	float aperture;//lens diameter. meters
 	float fov;//vertical field of view in radians
 	float aspect_ratio;//ratio of the width to the height of the image
-	float focal_length;
+	float focal_length;//meters
 	float quantum_efficeincy;//portion of photons which are converted to electons
+	float photon_energy;//average energy of photon detected by this sensor
 	float angular_spread_parameter;
+	float planar_spread_parameter;//one standard deviation of a star on the sensor. Measured in meters
 	float transmittance;//the portion of light which passes through the optics and is received at the sensor. Ideally 100%
-	float pixel_area;//The physical size of a single pixel on the sensor. Which may be smaller than the area of the sensor divided by the number of pixels, hence why it is a separate parameter.
-	float frame_interval;//amound of time between frames (realistically longer than the exposure time)
-	float sensor_size;//height of the sensor
+	float pixel_area;//The physical size of a single pixel on the sensor. Which may be smaller than the area of the sensor divided by the number of pixels, hence why it is a separate parameter. square meters
+
+
+	float sensor_size;//height of the sensor in meters
 	unsigned int width;//image width in pixels
 	unsigned int height;//image height in pixels
 	unsigned int full_well;//number of electrons required to saturate a pixel
 
 	//this should probably be part of a separate structure describing the capture parameters, as it's not an attribute of the optical system itself.
-	float exposure_time;//amount of time collecting light
 
 };
 struct star_field_generator {
@@ -53,6 +55,8 @@ struct star_field_generator {
 	unsigned int star_count;
 	star_field_star* stars;
 	bool positional_noise;
+	float frame_interval;//amound of time between frames (realistically longer than the exposure time)
+	float exposure_time;//amount of time collecting light
 	std::default_random_engine generator;
 	std::normal_distribution<float> distribution;
 	mat<float, 3, 3>(*path)(float);
@@ -210,5 +214,5 @@ void write_bitmap_to_png(const char* path, bitmap<unsigned char> img);
 float compute_apparent_star_radius(star_camera camera, star_field_star star);
 bitmap<float> generate_gaussian_image(unsigned int image_size, float scale, float standard_deviation);
 star_field generate_star_field(star_field_generator gen, float start_time, float end_time);
-
+float get_star_bounding_radius(star_field_star s);
 unsigned short** simulate_image(int width, int height, int adc_bits);

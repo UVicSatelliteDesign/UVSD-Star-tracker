@@ -130,8 +130,11 @@ unsigned short** simulate_image(int width, int height, int adc_bits) {
 
 	return pixels;
 }
-float compute_apparent_star_radius(star_camera camera, star_field_star star) {
-	return 0.0;
+float compute_apparent_star_radius(star_camera camera, float magnitude) {
+	float e_threshold = 1;
+	float f_0 = 2.518e-8;
+	float flux = camera.transmittance * camera.aperture * camera.aperture * std::_Pi * f_0 * log10(-0.4 * magnitude);
+	return 2 * camera.planar_spread_parameter * camera.planar_spread_parameter * log(camera.quantum_efficeincy * flux  / (e_threshold * 2 * std::_Pi * camera.planar_spread_parameter * camera.planar_spread_parameter * camera.photon_energy));
 }
 void compute_guassian_template(star_field_generator* gen) {
 	//compute the angular size of one pixel
@@ -166,8 +169,8 @@ bitmap<float> generate_gaussian_image(unsigned int image_size, float scale, floa
 	}	
 	return image;
 }
-star_field_centroid* get_centroids_from_star_field_generator(star_field_generator gen, mat<float, 3, 3> orientation) {
-	//
+fvec2* visible_centroids_from_star_field_generator(star_field_generator gen, mat<float, 3, 3> orientation) {
+	//this should be replaced with either a function which computed frustom geometry, or by some sort of property of the star tracker camera struct
 	mat<float, 3, 3> pitch_up_matrix = rotation_mat(orientation[0], gen.camera.fov / 2);
 	mat<float, 3, 3> pitch_down_matrix = rotation_mat(orientation[0], -gen.camera.fov / 2);
 	mat<float, 3, 3> yaw_left_matrix = rotation_mat(orientation[1], gen.camera.fov / 2);
@@ -180,24 +183,28 @@ star_field_centroid* get_centroids_from_star_field_generator(star_field_generato
 	fvec3 left_plane = normalize(mat_mult_vec(yaw_left_matrix, scale_vec(orientation[0], -1.0f)));
 	fvec3 right_plane = normalize(mat_mult_vec(yaw_right_matrix, orientation[0]));
 
-	unsigned int visible_star_count = 0;
-	star_field_star** visible_stars = new star_field_star* [gen.star_count];
 
 	//create array of output vectors:
-	star_field_centroid* centroids = new star_field_centroid[gen.star_count];
+	fvec2* centroids = new fvec2[gen.star_count];
 
-
+	
 	for (unsigned int i = 0; i < gen.star_count; i++) {
 		//project the star's direction onto the orientation basis
-		fvec3 frustum_position = transpose(orientation) * gen.stars[i].direction;
-		fvec2 centroid = init_vec<float, 2>({frustum_position[0], frustum_position[1]}) * (1.0 / frustum_position[0]);
-		if (gen.positional_noise) {
-			centroid += {{gen.distribution(gen.generator), gen.distribution(gen.generator)}};
-		}
-		if (vec_in_span(centroid, { {-1.0f, 1.0f}, {-1.0f, 1.0f} })) {
+		fvec3 position = transpose(orientation) * gen.stars[i].direction;
 
+
+		if (position[2] > 0.0 && abs(position[0]) < gen.camera.aspect_ratio && abs(position[1]) < 1.0) {
+			centroids[i][0] = position[0] / position[2];
+			centroids[i][1] = position[1] / position[2];
 		}
+		else {
+			centroids[i][0] = NAN;
+			centroids[i][1] = NAN;
+		}
+
 	}
+
+	return centroids;
 }
 star_field generate_star_field(star_field_generator gen, float start_time, float end_time) {
 	//number of standard deviations between each neighboring point in the exposure
@@ -241,22 +248,43 @@ star_field generate_star_field(star_field_generator gen, float start_time, float
 	//determine the time step necesarry to acheive the desired smoothness
 	int steps = ceil(largest_angle / (gaussian_spacing * gen.camera.angular_spread_parameter));
 	float time_step = (end_time - start_time) / (steps - 1);
+	
+	//Initialize flux bitmap
+	bitmap flux_bitmap = init_bitmap(gen.camera.width, gen.camera.height, 1, 0.0f);
 
-	//compute orientation matrices:
-	mat<float, 3, 3>* orientations = new mat<float, 3, 3>[steps];
-	mat<float, 3, 3> average_orientation = gen.path(0.5 * (start_time + end_time));
+	star_field field;
+	mat<float, 3, 3> average_orientation = gen.path(0.5f * (start_time + end_time));
 	float time = start_time;
+
+
+
 	for (int i = 0; i < steps; i++) {
-		orientations[i] = gen.path(time);
-		average_orientation += orientations[i];
+		mat<float, 3, 3> orientation = gen.path(time);
+
+		fvec2* centroids = visible_centroids_from_star_field_generator(gen, orientation);
+
+		//think: if a star goes off the screen during the exposure, should the centroid correspond to it's center of mass within the image, or it's true center mass including when it was off screen
+		//if the latter, you need to first determin which stars are visible at all. You could argue that due to the nature of the gaussian distribution, all stars will be visible in all frames.
+		//but this is unrealistic, so you need to determin a range / perimeter from the edge of the screen that depend on star brightness.
+		for (int j = 0; j < gen.star_count; j++) {
+			//if (!isnan(centroids[i][0])) {
+				print_vector(centroids[i]);
+				printf("\n");
+			//}
+		}
+
+
 		time += time_step;
 	}
 
+	//Sample the flux bitmap to get a an image output;
+	bitmap brightness_bitmap = init_bitmap(gen.camera.width, gen.camera.height, 1, (short)0);
 
-	//Initialize flux bitmap
-	bitmap flux_bitmap= init_bitmap(gen.camera.width, gen.camera.height, 1, 0.0f);
+	field.star_count = 0;
+	field.bitmap = brightness_bitmap;
 	
-
+	
+	return field;
 }
 void write_bitmap_to_png(const char* path, bitmap<unsigned char> img) {
 	stbi_flip_vertically_on_write(true);
