@@ -6,11 +6,7 @@ from catalog_parse import parse_Hipparcos, parse_tycho_2
 from tumble import camera_rotation_from_ra_dec, create_tumbling_path
 
 class camera:
-    def __init__(self, aperture: float, fov: float, aspect_ratio: float, 
-                 focal_length: float, quantum_efficiency: float, photon_energy: float, 
-                 angular_spread_parameter: float, 
-                 transmittance: float, pixel_area: float, dark_current: float, 
-                 sensor_size: float, width: int, height: int, full_well: int):
+    def __init__(self, aperture: float, fov: float, aspect_ratio: float, focal_length: float, quantum_efficiency: float, photon_energy: float, angular_spread_parameter: float, transmittance: float, pixel_area: float, dark_current: float, sensor_size: float, width: int, height: int, full_well: int):
         self.aperture = aperture                         # Lens diameter in meters
         self.fov = fov                                   # Vertical field of view in radians
         self.aspect_ratio = aspect_ratio                 # Ratio of width to height
@@ -37,20 +33,20 @@ class star_field_centroid:
         self.centroid = centroid                         # 2D pixel coordinates [x, y]
 
 class star_field_generator:
-    def __init__(self, camera: camera, star_count: int, stars: List[star_field_star], 
-                 exposure_time: int, path: Callable[[float], np.ndarray]):
+    def __init__(self, camera: camera, star_count: int, stars: List[star_field_star], path: Callable[[float], np.ndarray]):
         self.camera = camera
         self.star_count = star_count
         self.stars = stars
-        self.exposure_time = exposure_time               # Exposure time in seconds
         self.path = path                                 # Orientation path function
 
 def compute_star_flux(camera: camera, magnitude: float) -> float:
     # Flux density of the datum star vega [w/m2]
     f_0 = 3.5e-9
+    
+    # flux density of this star
+    f = f_0 * 10.0 ** (-0.4 * magnitude)
 
-    flux = (f_0 * camera.transmittance * 0.25 * np.pi * 
-            camera.aperture * camera.aperture * (10.0 ** (-0.4 * magnitude)))
+    flux = f * camera.transmittance * 0.25 * np.pi * camera.aperture * camera.aperture
     return flux
 
 def generate_gaussian_image(image_size: int, scale: float, standard_deviation: float, magnitude: float) -> np.ndarray:
@@ -72,12 +68,14 @@ def generate_gaussian_image(image_size: int, scale: float, standard_deviation: f
         
     return image
 
-def super_impose_image(source: np.ndarray, destination: np.ndarray, offset: np.ndarray, scale: float):
+def super_impose_image(source: np.ndarray, destination: np.ndarray, offset: np.ndarray, gain: float):
+    # get dimensions of the source and destination images
     src_h, src_w = source.shape
     dst_h, dst_w = destination.shape
     
     ox, oy = offset[0], offset[1]
     
+    # crop source image to fit in the destination
     x_min = max(0, int(np.floor(ox)))
     y_min = max(0, int(np.floor(oy)))
     x_max = min(dst_w, int(np.ceil(ox + src_w)))
@@ -94,9 +92,12 @@ def super_impose_image(source: np.ndarray, destination: np.ndarray, offset: np.n
             fx = src_x_f - sx
             fy = src_y_f - sy
             
+            # interpolation samples the 2x2 grid of source image values nearest to the sub-pixel point of interest (sx, sy). This checks if that 2x2 window extends past the source image
             if sx < 0 or sx + 1 >= src_w or sy < 0 or sy + 1 >= src_h:
+                
+                # enherit boundary value
                 if 0 <= sx < src_w and 0 <= sy < src_h:
-                    destination[dst_y, dst_x] += source[sy, sx] * scale
+                    destination[dst_y, dst_x] += source[sy, sx] * gain
                 continue
             
             v00 = source[sy, sx]
@@ -111,16 +112,21 @@ def super_impose_image(source: np.ndarray, destination: np.ndarray, offset: np.n
                 v11 * fx * fy
             )
             
-            destination[dst_y, dst_x] += interpolated_val * scale
+            destination[dst_y, dst_x] += interpolated_val * gain
 
 def generate_star_field(gen: star_field_generator, start_time: float, end_time: float) -> Tuple[np.ndarray, List[star_field_centroid]]:
-    ## Maximum distance that gaussians can be placed apart between sub-frames 
+    # !Important!: this is just used to make to make the output images easier to see.
+    # set this to 1 when doing actual tests
+    debugging_gain = 100
+
+
+    ## maximum distance that gaussians can be placed apart between sub-frames 
     gaussian_spacing = 1.5
     
     start_matrix = gen.path(start_time)
     end_matrix = gen.path(end_time)
     
-    ## Estimate the largest angle a point in the image can sweep out during this frame by finding the maximum angular change of the corners from the start to the end of the frame
+    ## estimate the largest angle a point in the image can sweep out during this frame by finding the maximum angular change of the corners from the start to the end of the frame
     y_offset = np.tan(gen.camera.fov / 2.0)
     x_offset = gen.camera.aspect_ratio * y_offset
     raw_corners = [
@@ -133,7 +139,7 @@ def generate_star_field(gen: star_field_generator, start_time: float, end_time: 
     ## normalize corner vectors:
     corners = [c / np.linalg.norm(c) for c in raw_corners] 
 
-    ## Find which corner moved the most and use it as a heuristic for the maximmum possible distance a point can move in on frame
+    ## find which corner moved the most and use it as a heuristic for the maximmum possible distance a point can move in on frame
     largest_angle = 0.0
     for c in corners:
         rotated_start = start_matrix @ c
@@ -147,7 +153,7 @@ def generate_star_field(gen: star_field_generator, start_time: float, end_time: 
         if angle > largest_angle:
             largest_angle = angle
     
-    ## Approximate anglular size out of a single pixel
+    ## approximate anglular size of a single pixel
     pixel_angle = gen.camera.fov / gen.camera.height
     
     ## 1 standard deviation of the star's 2D gaussian distribution measured in pixels
@@ -156,15 +162,17 @@ def generate_star_field(gen: star_field_generator, start_time: float, end_time: 
     ## 1 standard deviation of the star's 2D gaussian distribution measured in m
     sigma_sensor = gen.camera.sensor_size * gen.camera.angular_spread_parameter / gen.camera.fov
 
-    ## Minimum number of sub-frames that need to stitched together this frame to ensure the gaussians are less than one [gaussian_spacing] apart (ensures smooth streaks instead of dotted lines)
+    ## minimum number of sub-frames that need to be stitched together this frame to ensure the gaussians are less than one [gaussian_spacing] apart (ensures smooth streaks instead of dotted lines)
     steps = max(1, int(np.ceil(largest_angle / (gaussian_spacing * gen.camera.angular_spread_parameter))))
     time_step = (end_time - start_time) / steps
     
-    ## This bitmaps is not the acutual brightness observed in the image, but rather the average power flux for each pixel 
+    ## this bitmaps is not the actual brightness observed in the image, but rather the average power flux for each pixel 
     flux_bitmap = np.zeros((gen.camera.height, gen.camera.width), dtype=np.float32)
     
     epsilon = np.sin(gen.camera.fov * 0.5)
     pixel_size = gen.camera.sensor_size / gen.camera.height
+    
+    # make sure the image is large enough to capture nearly the entire normal distribution
     template_size = int(np.ceil(2 * 5 * sigma_pixels))
     if template_size % 2 == 0:
         template_size += 1
@@ -172,22 +180,26 @@ def generate_star_field(gen: star_field_generator, start_time: float, end_time: 
     
     visible_centroids: List[star_field_centroid] = []
     
-    print(steps);
-
+    print(f"# of sub-frames needed: {steps}");
 
     time = start_time
     for step_idx in range(steps):
         orientation = gen.path(time)
-        ##print(orientation);
+
         for j, star in enumerate(gen.stars):
             position = orientation.T @ star.direction
+            
+            # check if the star is infront on the camera and in the field of view 
             if position[2] > 0.0 and abs(position[0]) < gen.camera.aspect_ratio * epsilon and abs(position[1]) < epsilon:
                 norm_x = position[0] / position[2]
                 norm_y = position[1] / position[2]
+                
                 img_x = ((norm_x / (gen.camera.aspect_ratio * epsilon)) + 1.0) * gen.camera.width * 0.5
                 img_y = ((norm_y / epsilon) + 1.0) * gen.camera.height * 0.5
                 
                 sub_frame_energy = time_step * compute_star_flux(gen.camera, star.magnitude)
+
+                # subtract half of the template's size in the x and y directions to get the offset of the top left corner
                 offset = np.array([img_x - template_size * 0.5, img_y - template_size * 0.5])
                 
                 super_impose_image(gaussian_template, flux_bitmap, offset, sub_frame_energy)
@@ -195,22 +207,26 @@ def generate_star_field(gen: star_field_generator, start_time: float, end_time: 
                 
         time += time_step
         
-    ## This is bitmap contains the actual raw digital value recorded by the camera, accounting for shot noise and thermal fluctuations
+    ## this is bitmap contains the actual raw digital value recorded by the camera, accounting for shot noise and thermal fluctuations
     brightness_bitmap = np.zeros((gen.camera.height, gen.camera.width), dtype=np.uint16)
     thermal_noise_mean = (end_time - start_time) * gen.camera.dark_current
     
     rng = np.random.default_rng(0)
     for y in range(gen.camera.height):
         for x in range(gen.camera.width):
+            # mean energies
             pixel_energy = flux_bitmap[y, x]
             mean_photons = pixel_energy / gen.camera.photon_energy
             mean_electrons = gen.camera.quantum_efficiency * mean_photons
             
+            # since electrons are discrete, arrive randomly and independantly, the number of them reaching the sensor over a given timespan can be found by sampling a poisson distribution 
             thermal_electrons = rng.poisson(thermal_noise_mean)
             signal_electrons = rng.poisson(mean_electrons) if mean_electrons > 0 else 0
             
             total_electrons = thermal_electrons + signal_electrons
-            digital_val = min(gen.camera.full_well, 100*total_electrons)
+
+            # limit brightness value to saturation threshold 
+            digital_val = min(gen.camera.full_well, debugging_gain * total_electrons)
             brightness_bitmap[y, x] = digital_val
             
     return brightness_bitmap, visible_centroids
@@ -227,12 +243,12 @@ def save_simulation_output(camera: camera, exposure_time: float, bitmap_img: np.
     output_dir = Path("synthetic_output") / folder_name
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save PNG Image
+    # save PNG Image
     img_path = output_dir / "simulated_star_field.png"
     cv2.imwrite(str(img_path), bitmap_img)
     
-    # Save Metadata Text File
-    txt_path = output_dir / "star_metadata.txt"
+    # save centroid metadata text file
+    txt_path = output_dir / "centroid_metadata.txt"
     with open(txt_path, 'w', encoding='utf-8') as f:
         f.write(f"=== Star Tracker Synthetic Image Metadata ===\n")
         f.write(f"Total Visible Star Instances: {len(centroids)}\n")
@@ -245,7 +261,7 @@ def save_simulation_output(camera: camera, exposure_time: float, bitmap_img: np.
     print(f"Files saved to: {output_dir}")
 
 if __name__ == "__main__":
-    magnitude_limit = 8.0
+    magnitude_limit = 9.0
 
     ##catalog_filename = "hipparcos.txt"
     ##print(f"Loading star catalog from {catalog_filename}...")
@@ -258,42 +274,41 @@ if __name__ == "__main__":
     catalog_stars = []
     for star_id, mag, vec in zip(ids, mags, vectors):
         if mag <= magnitude_limit:
-            catalog_stars.append(star_field_star(direction=vec, magnitude=mag))
+            catalog_stars.append(star_field_star(direction = vec, magnitude = mag))
             
     cam = camera(
-        aperture=0.05,
-        fov=np.radians(30.0),
-        aspect_ratio=1.333,
-        focal_length=0.1,
-        quantum_efficiency=0.8,
-        photon_energy=3.5e-19,
-        angular_spread_parameter=0.0005,
-        transmittance=0.9,
-        pixel_area=1.0e-11,
-        dark_current=10.0,
-        sensor_size=0.01,
-        width=1024,
-        height=768,
-        full_well=65535
+        aperture = 0.05,
+        fov = np.radians(30.0),
+        aspect_ratio = 1.333,
+        focal_length = 0.1,
+        quantum_efficiency = 0.8,
+        photon_energy = 3.5e-19,
+        angular_spread_parameter = 0.0005,
+        transmittance = 0.9,
+        pixel_area = 1.0e-11,
+        dark_current = 10.0,
+        sensor_size = 0.01,
+        width = 1024,
+        height = 768,
+        full_well = 65535
     )
     
     ## starting orientation:
     initial_rotation = camera_rotation_from_ra_dec(np.radians(266), np.radians(-28.9));
 
-    ## Angular velocity
-    tumbling_omega = [0.008, 0.00, 0.002]  # radians / second
+    ## angular velocity
+    tumbling_omega = [0.001, 0.002, 0.000]  # radians / second
     
-    path = create_tumbling_path(omega_vec=tumbling_omega, initial_rotation = initial_rotation)
+    path = create_tumbling_path(omega_vec = tumbling_omega, initial_rotation = initial_rotation)
     
     generator = star_field_generator(
-        camera=cam,
-        star_count=len(catalog_stars),
-        stars=catalog_stars,
-        exposure_time=2,
-        path=path
+        camera = cam,
+        star_count = len(catalog_stars),
+        stars = catalog_stars,
+        path = path
     )
     
     print("Generating synthetic star field...")
-    image_bitmap, centroids = generate_star_field(generator, start_time=0.0, end_time=2.0)
+    image_bitmap, centroids = generate_star_field(generator, start_time = 0.0, end_time = 2.0)
     
     save_simulation_output(cam, exposure_time=2, bitmap_img=image_bitmap, centroids=centroids)

@@ -11,18 +11,14 @@ class image_centroid:
 
 
 def flood_fill(start_y: int, start_x: int, binary_mask: np.ndarray, visited: np.ndarray) -> List[Tuple[int, int]]:
-    """
-    Performs an iterative stack-based flood fill (8-connectivity) starting from a seed pixel.
-    Mirrors the logic of a low-level C implementation using a stack buffer.
-    """
     height, width = binary_mask.shape
-    component_pixels: List[Tuple[int, int]] = []
+    pixels: List[Tuple[int, int]] = []
     
-    # Explicit stack for tracking pixels to process (avoids recursion depth limits in Python)
+    # stack for keeping track of which pixels have been visited
     stack = [(start_y, start_x)]
     visited[start_y, start_x] = True
     
-    # 8-connectivity neighbor offsets (horizontal, vertical, and diagonal)
+    # neighbor offsets
     neighbors = [
         (-1, -1), (-1, 0), (-1, 1),
         ( 0, -1),          ( 0, 1),
@@ -31,45 +27,44 @@ def flood_fill(start_y: int, start_x: int, binary_mask: np.ndarray, visited: np.
     
     while stack:
         cy, cx = stack.pop()
-        component_pixels.append((cy, cx))
+        pixels.append((cy, cx))
         
         for dy, dx in neighbors:
             ny, nx = cy + dy, cx + dx
             
-            # Check image boundaries
+            # check image boundaries
             if 0 <= ny < height and 0 <= nx < width:
-                # If the neighbor is part of the star binary mask and has not been visited yet
+                # if the neighbor is part of the star binary mask and has not been visited yet
                 if binary_mask[ny, nx] and not visited[ny, nx]:
                     visited[ny, nx] = True
                     stack.append((ny, nx))
                     
-    return component_pixels
+    return pixels
 
 
 def extract_centroids(image_bitmap: np.ndarray, noise_threshold: float) -> List[image_centroid]:
     img_float = image_bitmap.astype(np.float32)
     height, width = img_float.shape
     
-    # 1. Threshold the image to create a boolean binary mask of potential star pixels
+    # apply threshold
     binary_mask = (img_float > noise_threshold)
     visited = np.zeros((height, width), dtype=bool)
     
     detected_stars: List[image_centroid] = []
     
-    # 2. Raster scan across the entire image grid
+    # visit each pixel and apply the the flood fill
     for y in range(height):
         for x in range(width):
-            # If we find an unvisited pixel belonging to a star, trigger flood fill
             if binary_mask[y, x] and not visited[y, x]:
                 component_pixels = flood_fill(y, x, binary_mask, visited)
                 
                 pixel_count = len(component_pixels)
                 
-                # 3. Filter out speckles that are too small
+                # filter out speckles that are too small
                 if pixel_count < 2:
                     continue
 
-                # Compute centroid bounding box
+                # compute centroid bounding box
                 min_x = min(pixel[1] for pixel in component_pixels)
                 max_x = max(pixel[1] for pixel in component_pixels)
                 min_y = min(pixel[0] for pixel in component_pixels)

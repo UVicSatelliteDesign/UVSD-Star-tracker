@@ -27,24 +27,20 @@ def camera_rotation_from_ra_dec(ra: float, dec: float) -> np.ndarray:
     
     return R
 
-def create_tumbling_path(omega_vec: Union[list, np.ndarray], initial_rotation: Optional[np.ndarray] = None) -> Callable[[float], np.ndarray]:
-    omega_vec = np.array(omega_vec, dtype=float)
+def create_tumbling_path(omega_vec:  np.array, initial_rotation:  np.array) -> Callable[[float], np.ndarray]:
     omega_magnitude = np.linalg.norm(omega_vec)
     
-    if initial_rotation is None:
-        R0 = np.eye(3)
-    else:
-        R0 = np.array(initial_rotation, dtype=float)
+    R0 = np.array(initial_rotation, dtype=float)
         
-    # If angular velocity is zero, return a static orientation path
+    # if angular velocity is zero, return a static orientation path
     if omega_magnitude == 0.0:
         return lambda t: R0
         
-    # Unit axis of rotation
+    # unit vector of axis of rotation
     axis = omega_vec / omega_magnitude
     k_x, k_y, k_z = axis
     
-    # Pre-compute skew-symmetric cross-product matrix K for Rodrigues' formula
+    # pre-compute skew-symmetric cross-product matrix K for Rodrigues' formula
     K = np.array([
         [0.0, -k_z, k_y],
         [k_z, 0.0, -k_x],
@@ -52,15 +48,15 @@ def create_tumbling_path(omega_vec: Union[list, np.ndarray], initial_rotation: O
     ])
     
     def path(t: float) -> np.ndarray:
-        # Total rotation angle at time t
+        # total rotation angle at time t
         angle = omega_magnitude * t
         c = np.cos(angle)
         s = np.sin(angle)
         
-        # Rodrigues' rotation formula for the incremental tumble
+        # apply rodrigues' formula to incremental the tumble
         R_tumble = np.eye(3) + s * K + (1.0 - c) * np.dot(K, K)
         
-        # Total orientation is tumble applied relative to the initial orientation
+        # total orientation is tumble applied relative to the initial orientation
         return R_tumble @ R0
         
     return path
