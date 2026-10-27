@@ -1,10 +1,8 @@
 #pragma once
-#include <intrin.h>
+#include "platform.h"
 #include <algorithm>
 #include "linear_algebra.h"
 #include <iomanip>
-#include <io.h>
-#include <fcntl.h>
 
 template <typename T>
 struct key_z_index_pair {
@@ -407,7 +405,7 @@ vec<int, D> int_components_from_vec(vec<float, D> v, vec<float, D> min, vec<floa
 }
 template <unsigned int D>
 vec<float, D> z_index_to_vec(unsigned long long int Z, vec<float, D> min, vec<float, D> max) {
-	vec<D> v;
+	vec<float, D> v;
 	for (int i = 0; i < D; i++) {
 		v[i] = cluster_bits<D>(Z) * (max[i] - min[i]) + min[i];
 	}

@@ -6,6 +6,8 @@
 #include <algorithm>
 //#include "stb_image_write.h"
 
+static const float PI_F = 3.14159265358979f;
+
 
 unsigned short** simulate_image(int width, int height, int adc_bits) {
 	//intialize flux array
@@ -105,7 +107,7 @@ unsigned short** simulate_image(int width, int height, int adc_bits) {
 		for (int j = 0; j < height; j++) {
 			if (flux[i][j] > 0) {
 				std::poisson_distribution<> poisson(flux[i][j]);
-				pixels[i][j] = unsigned short(std::min(max_val, poisson(generator)));
+				pixels[i][j] = (unsigned short)(std::min(max_val, poisson(generator)));
 			}
 			else {
 				pixels[i][j] = 0;
@@ -124,7 +126,7 @@ unsigned short** simulate_image(int width, int height, int adc_bits) {
 	for (int i = 0; i < width; i++) {
 		for (int j = 0; j < height; j++) {
 			//std::cout << distribution(generator) / max_val << "\n";
-			*(p++) = unsigned char(255 * std::min(float(pixels[i][j]) / max_val + distribution(generator) / 255.0f, 1.0f));
+			*(p++) = (unsigned char)(255 * std::min(float(pixels[i][j]) / max_val + distribution(generator) / 255.0f, 1.0f));
 		}
 	}	stbi_write_png("./test_img.png", width, height, 1, image_data, 0);
 
@@ -133,8 +135,8 @@ unsigned short** simulate_image(int width, int height, int adc_bits) {
 float compute_apparent_star_radius(star_camera camera, float magnitude) {
 	float e_threshold = 1;
 	float f_0 = 2.518e-8;
-	float flux = camera.transmittance * camera.aperture * camera.aperture * std::_Pi * f_0 * log10(-0.4 * magnitude);
-	return 2 * camera.planar_spread_parameter * camera.planar_spread_parameter * log(camera.quantum_efficeincy * flux  / (e_threshold * 2 * std::_Pi * camera.planar_spread_parameter * camera.planar_spread_parameter * camera.photon_energy));
+	float flux = camera.transmittance * camera.aperture * camera.aperture * PI_F * f_0 * log10(-0.4 * magnitude);
+	return 2 * camera.planar_spread_parameter * camera.planar_spread_parameter * log(camera.quantum_efficeincy * flux  / (e_threshold * 2 * PI_F * camera.planar_spread_parameter * camera.planar_spread_parameter * camera.photon_energy));
 }
 void compute_guassian_template(star_field_generator* gen) {
 	//compute the angular size of one pixel
@@ -154,7 +156,7 @@ void compute_guassian_template(star_field_generator* gen) {
 }
 bitmap<float> generate_gaussian_image(unsigned int image_size, float scale, float standard_deviation) {
 	bitmap<float> image = init_bitmap(image_size, image_size, 1, 0.0f);
-	float normalization_factor = 1.0 / (2.0 * std::_Pi * standard_deviation * standard_deviation);
+	float normalization_factor = 1.0 / (2.0 * PI_F * standard_deviation * standard_deviation);
 	float exponent_coefficient = -0.5 / (standard_deviation * standard_deviation);
 	float step = scale / image_size;
 	float x = -scale * 0.5 + 0.5 * step;
