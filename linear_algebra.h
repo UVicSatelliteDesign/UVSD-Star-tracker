@@ -4,8 +4,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <string>
-#include <io.h>
-#include <fcntl.h>
+#include "platform.h"
 
 template <typename T, unsigned int D>
 struct vec {

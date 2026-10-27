@@ -1,6 +1,6 @@
 ﻿#include <iostream>
 #include <fstream>
-#include <intrin.h>
+#include "platform.h"
 #include <random>
 #include <string>
 #include <math.h>
