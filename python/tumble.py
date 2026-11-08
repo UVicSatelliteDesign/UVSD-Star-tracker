@@ -1,30 +1,33 @@
 import numpy as np
 from typing import Callable, Optional, Union
 
-def camera_rotation_from_ra_dec(ra: float, dec: float) -> np.ndarray:
-    # convert ra and dec to unit vector components
-    x = np.cos(dec) * np.cos(ra)
-    y = np.cos(dec) * np.sin(ra)
-    z = np.sin(dec)
-    target_dir = np.array([x, y, z], dtype=float)
-    
-    reference_up = np.array([0.0, 0.0, 1.0])
-    
-    # edge care if pointing directly at a celestial pole
-    polar_proximity = np.dot(target_dir, reference_up)
-    if np.abs(polar_proximity) == 1.0:
-        reference_up = np.array([0.0, np.sign(polar_proximity), 0.0])
-        
-    # compute camera right (+X) and up (+Y) vectors
-    right = np.cross(target_dir, reference_up)
-    right /= np.linalg.norm(right)
-    
-    up = np.cross(right, target_dir)
-    up /= np.linalg.norm(up)
-    
-    # concatenate direction vectors into a rotation matrix
-    R = np.column_stack((right, up, target_dir))
-    
+def camera_rotation_from_ra_dec(ra: float, dec: float, roll: float) -> np.ndarray:
+    # performs a zyz rotation sequence to transform vectors from equatorial coordinates to camera coordinates
+
+    # rotation about z-axis by ra
+    Rz_ra = np.array([
+        [np.cos(ra), np.sin(ra), 0],
+        [-np.sin(ra), np.cos(ra), 0],
+        [0, 0, 1]
+    ])
+
+    # rotation about y-axis by dec
+    Ry_dec = np.array([
+        [np.cos(np.pi/2 - dec), 0, -np.sin(np.pi/2 - dec)],
+        [0, 1, 0],
+        [np.sin(np.pi/2 - dec), 0, np.cos(np.pi/2 - dec)]
+    ])
+
+    # rotation about z-axis by roll
+    Rz_roll = np.array([
+        [np.cos(np.pi/2 + roll), np.sin(np.pi/2 + roll), 0],
+        [-np.sin(np.pi/2 + roll), np.cos(np.pi/2 + roll), 0],
+        [0, 0, 1]
+    ])
+
+    # combine all rotations
+    R = Rz_roll @ (Ry_dec @ Rz_ra)
+
     return R
 
 def create_tumbling_path(omega_vec:  np.array, initial_rotation:  np.array) -> Callable[[float], np.ndarray]:
