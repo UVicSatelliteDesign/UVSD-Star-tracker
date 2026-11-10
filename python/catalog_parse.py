@@ -17,6 +17,7 @@ def parse_Hipparcos(file_path):
     unit_vectors = []
     
     with open(file_path, 'r', encoding='cp1252') as f:
+        index = 0
         for line in f:
             ## get entry values from the current line
             match = pattern.match(line.strip())
@@ -25,11 +26,11 @@ def parse_Hipparcos(file_path):
                 
             star_id, ra_h, ra_m, ra_s, dec_deg, dec_m, dec_s, brightness = match.groups()
             
-            # Convert RA from hours/min/sec to radians
+            # convert RA from hours/min/sec to radians
             h, m, s = float(ra_h), float(ra_m), float(ra_s)
             alpha = 2 * np.pi * (1.0 / 24.0) * (h + (1.0 / 60.0) * (m + (1.0 / 60.0) * s))
             
-            # Convert DEC from deg/min/sec to radians
+            # convert DEC from deg/min/sec to radians
             d, dm, ds = float(dec_deg), float(dec_m), float(dec_s)
             
             # ensure minute/second offsets carry the sign of the degree component
@@ -42,9 +43,12 @@ def parse_Hipparcos(file_path):
             uz = np.sin(delta)
             
             # push to the output arrays
-            star_ids.append(int(star_id))
+            star_ids.append(int(index))
             magnitudes.append(float(brightness))
             unit_vectors.append([ux, uy, uz])
+
+            index = index + 1
+
             
     return (
         np.array(star_ids, dtype=int),
@@ -60,11 +64,8 @@ def parse_tycho_2(filepath: str, magnitude_limit: float = 11.0) -> Tuple[List[st
     print(f"Parsing Tycho-2 catalog from {filepath} (Magnitude limit <= {magnitude_limit})...")
     
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-        for line in f:
-            if len(line) < 130:
-                continue
-                
-            # this is all based from table 2 from the "Guise to the Tycho-2 Catalogue"
+        for index, line in enumerate(f):
+            # this is all based from table 2 from the "Guide to the Tycho-2 Catalogue"
 
             # extract Tycho-2 ID components (TYC1, TYC2, TYC3)
             tyc1 = line[0:4].strip()        # GSC region number
@@ -92,10 +93,10 @@ def parse_tycho_2(filepath: str, magnitude_limit: float = 11.0) -> Tuple[List[st
             elif bt_str:
                 mag = float(bt_str)
             else:
-                # Skip if no magnitude data is present
+                # skip if no magnitude data is present
                 continue
                 
-            # filter by magnitude limit to optimize simulation performance
+            # filter by magnitude limit
             if mag > magnitude_limit:
                 continue
                 
@@ -109,7 +110,7 @@ def parse_tycho_2(filepath: str, magnitude_limit: float = 11.0) -> Tuple[List[st
             z = np.sin(dec_rad)
             vector = np.array([x, y, z], dtype=float)
             
-            ids.append(star_id)
+            ids.append(index)
             mags_list.append(mag)
             vectors_list.append(vector)
 
